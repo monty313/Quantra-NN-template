@@ -64,7 +64,9 @@ Consecutive 1m rows share 14/15 of the 15m window. We train on every 5th row and
 - LightGBM: shallow, early stop on time-ordered val.
 - MLP: 128→64→32→3, dropout, weight decay, **not** Quantra's 5-layer sigmoid tower.
 
-If MLP loses to logistic on the untouched test set, that is the result. Do not keep training until the NN "wins."
+If MLP loses to logistic on the untouched test set, that is the result. Do not keep training until the NN "wins." `v6_learn` LESSONS_BOOK called that "stamping the day": the score moves, the skill does not.
+
+Prior-repo map (what we refused vs kept): `docs/stage1-plan.md` § Lessons.
 
 ## MT5 matching without a terminal
 
