@@ -55,27 +55,33 @@ class Policy(Protocol):
 class DualHead:
     """Two independent 3-class heads sharing one policy class, not one net.
 
+    Default names are the Stage-1 structure heads (next closed 5m / 30m).
     The MLP policy may itself be two-headed; DualHead still wraps two copies
     for logistic / LightGBM / majority.
     """
 
-    def __init__(self, make_policy):
-        self.head_15m = make_policy()
-        self.head_1h = make_policy()
+    def __init__(self, make_policy, ltf_key: str = "y_5m", htf_key: str = "y_30m"):
+        self.ltf_key = ltf_key
+        self.htf_key = htf_key
+        self.head_ltf = make_policy()
+        self.head_htf = make_policy()
+        # Old names kept as aliases so explain scripts do not fork.
+        self.head_15m = self.head_ltf
+        self.head_1h = self.head_htf
 
-    def fit(self, X, y_15m, y_1h, X_val=None, y_15m_val=None, y_1h_val=None, sample_weight=None):
-        self.head_15m.fit(X, y_15m, sample_weight=sample_weight, X_val=X_val, y_val=y_15m_val)
-        self.head_1h.fit(X, y_1h, sample_weight=sample_weight, X_val=X_val, y_val=y_1h_val)
+    def fit(self, X, y_ltf, y_htf, X_val=None, y_ltf_val=None, y_htf_val=None, sample_weight=None):
+        self.head_ltf.fit(X, y_ltf, sample_weight=sample_weight, X_val=X_val, y_val=y_ltf_val)
+        self.head_htf.fit(X, y_htf, sample_weight=sample_weight, X_val=X_val, y_val=y_htf_val)
         return self
 
     def predict_proba(self, X) -> dict[str, np.ndarray]:
         return {
-            "y_15m": self.head_15m.predict_proba(X),
-            "y_1h": self.head_1h.predict_proba(X),
+            self.ltf_key: self.head_ltf.predict_proba(X),
+            self.htf_key: self.head_htf.predict_proba(X),
         }
 
     def explain(self, X) -> dict[str, dict]:
         return {
-            "y_15m": self.head_15m.explain(X),
-            "y_1h": self.head_1h.explain(X),
+            self.ltf_key: self.head_ltf.explain(X),
+            self.htf_key: self.head_htf.explain(X),
         }

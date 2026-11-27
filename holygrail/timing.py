@@ -15,6 +15,7 @@ At t=10:05 the 5m current bar is 10:00; at t=10:06 it is 10:05 with one 1m candl
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from holygrail.config import TF_FREQ
@@ -56,6 +57,16 @@ def developing_ohlc(m1: pd.DataFrame, freq: str) -> pd.DataFrame:
     )
     out["tp"] = (out["high"] + out["low"] + out["close"]) / 3.0
     return out
+
+
+def last_row_of_bar(open_time: pd.DatetimeIndex, freq: str) -> np.ndarray:
+    """True on the last 1m of each F-bar (one snapshot per HTF bar)."""
+    bar = bar_open_of(open_time, freq)
+    nxt = bar[1:]
+    is_last = np.empty(len(bar), dtype=bool)
+    is_last[:-1] = bar[:-1] != nxt
+    is_last[-1] = True
+    return is_last
 
 
 def completed_and_dev(m1: pd.DataFrame, tf_key: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series]:

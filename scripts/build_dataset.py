@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Build X (128), y_15m / y_1h, scaler. Shared train/live code path."""
+"""Build X (128), structure y_5m / y_30m, scaler. Shared train/live code path.
+
+X is unchanged (128 cols, order, scaler rules, leak-safe timing).
+y_15m / y_1h are written as unused comparison columns.
+"""
 
 from __future__ import annotations
 
@@ -14,11 +18,13 @@ import numpy as np
 import pandas as pd
 
 from holygrail.columns import FEATURE_COLUMNS, FEATURE_VERSION
+from holygrail.config import STRUCTURE_PURGE_MINUTES, TF_FREQ
 from holygrail.features import build_features
 from holygrail.io import load_mt5_m1
 from holygrail.labels import build_labels
 from holygrail.scaler import fit_gap_scaler, save_scaler, transform_gaps
 from holygrail.splits import class_counts, time_split
+from holygrail.timing import last_row_of_bar
 
 
 def main() -> None:
@@ -39,12 +45,17 @@ def main() -> None:
     lab = build_labels(m1, ft)
     print(f"features valid {int(ft.valid.sum())}/{len(ft.valid)}", flush=True)
 
-    # Split on the 1h horizon (stricter purge)
-    split = time_split(ft.decision_time, ft.valid, lab.label_valid_1h, label_horizon_minutes=60)
-    # Train rows also need a 15m label
-    train_idx = split.train_idx[lab.label_valid_15m[split.train_idx]]
-    val_idx = split.val_idx[lab.label_valid_15m[split.val_idx]]
-    test_idx = split.test_idx[lab.label_valid_15m[split.test_idx]]
+    # Split on the 30m structure horizon (stricter of the two primary heads)
+    both_struct = lab.label_valid_5m & lab.label_valid_30m
+    split = time_split(
+        ft.decision_time,
+        ft.valid,
+        both_struct,
+        label_horizon_minutes=STRUCTURE_PURGE_MINUTES,
+    )
+    train_idx = split.train_idx
+    val_idx = split.val_idx
+    test_idx = split.test_idx
 
     X = ft.X
     scaler = fit_gap_scaler(X.iloc[train_idx])
@@ -57,14 +68,25 @@ def main() -> None:
         extra={"symbol": Path(args.csv).name, "n_train": int(len(train_idx))},
     )
 
+    last5 = last_row_of_bar(ft.timestamps, TF_FREQ["5m"])
+
     def pack(idx):
         return pd.DataFrame(
             {
                 "open_time": ft.timestamps[idx],
                 "decision_time": ft.decision_time[idx],
+                "y_5m": lab.y_5m[idx],
+                "y_30m": lab.y_30m[idx],
+                "y_1h_struct": lab.y_1h_struct[idx],
+                "y_5m_wide": lab.y_5m_wide[idx],
+                "y_30m_wide": lab.y_30m_wide[idx],
                 "y_15m": lab.y_15m[idx],
                 "y_1h": lab.y_1h[idx],
                 "atr_5m": ft.atr_5m[idx],
+                "last_1m_of_5m": last5[idx],
+                "label_valid_1h_struct": lab.label_valid_1h_struct[idx],
+                "label_valid_5m_wide": lab.label_valid_5m_wide[idx],
+                "label_valid_30m_wide": lab.label_valid_30m_wide[idx],
             }
         )
 
@@ -77,19 +99,28 @@ def main() -> None:
         "n_train": int(len(train_idx)),
         "n_val": int(len(val_idx)),
         "n_test": int(len(test_idx)),
+        "primary_heads": ["y_5m", "y_30m"],
+        "comparison_heads": ["y_15m", "y_1h"],
         "class_counts": {
+            "train_5m": class_counts(lab.y_5m[train_idx]),
+            "train_30m": class_counts(lab.y_30m[train_idx]),
+            "train_1h_struct": class_counts(lab.y_1h_struct[train_idx]),
+            "train_5m_wide": class_counts(lab.y_5m_wide[train_idx]),
+            "train_30m_wide": class_counts(lab.y_30m_wide[train_idx]),
             "train_15m": class_counts(lab.y_15m[train_idx]),
             "train_1h": class_counts(lab.y_1h[train_idx]),
-            "val_15m": class_counts(lab.y_15m[val_idx]),
-            "val_1h": class_counts(lab.y_1h[val_idx]),
+            "val_5m": class_counts(lab.y_5m[val_idx]),
+            "val_30m": class_counts(lab.y_30m[val_idx]),
+            "test_5m": class_counts(lab.y_5m[test_idx]),
+            "test_30m": class_counts(lab.y_30m[test_idx]),
             "test_15m": class_counts(lab.y_15m[test_idx]),
             "test_1h": class_counts(lab.y_1h[test_idx]),
         },
         "columns": FEATURE_COLUMNS,
     }
     (out / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    print("class_counts", json.dumps(meta["class_counts"], indent=2), flush=True)
 
-    # Persist scaled X + labels for modeling (valid rows only in splits)
     for name, idx in (("train", train_idx), ("val", val_idx), ("test", test_idx)):
         part = X_scaled.iloc[idx].copy()
         part = part.astype(np.float32)

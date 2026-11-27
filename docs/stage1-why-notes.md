@@ -5,7 +5,7 @@ Mark: read this next to the repo. Short reasons, not a second spec.
 ## Three layers, on purpose
 
 1. `holygrail/` builds X and validity from 1m candles. Same function for history and live.
-2. `holygrail/labels.py` builds y_15m / y_1h in a **separate** table. Targets never enter X or the scaler.
+2. `holygrail/labels.py` builds answers in a **separate** table. Targets never enter X or the scaler. Training heads are next-closed **5m** and **30m** structure. Old y_15m / y_1h stay as unused comparison columns.
 3. `holygrail/policy.py` is `fit` / `predict_proba` / `explain`. LightGBM, logistic, MLP, or a later RL head can swap without touching features.
 
 Quantra's Keras file is not the network. It is a course template with accuracy + sigmoid. We did not lock to it.
@@ -41,9 +41,20 @@ IQR of 0 → scale 1, no clipping.
 
 ## Labels
 
-move = TP(t+h) − TP(t). Threshold = 0.5 × 5m ATR14 at t.
+X is set 2: live 1m + developing 5m/30m/1h **structure**. A 15-minute 1m-tick vs 0.5×5m ATR asks “did the next 15 ones-and-zeros of price clear a 5m ATR band?” That is not the question the 128 columns describe, which is why those heads sat on the majority.
 
-No candle at exactly t+h → missing, not 0. Calling a weekend gap "flat" was the easy cheat; T27 guards it.
+**Training heads (CEO 2026-11-27):** next **closed** 5m and next **closed** 30m structure direction.
+
+- `now` = typical price of **this** F-bar when it has closed (B_t). Shared for every 1m inside that bar. Labels may use that close; early-row X does not.
+- `future` = typical price of the **next** F-bar (B_{t+1}). X never contains B_{t+1}. We do not skip B_t (that compared B_{t-1} to B_{t+1} and put class 0 back in the majority).
+- threshold = **0.5 × ATR14 of that same F-bar series**, at B_t. Spec already names 0.5× ATR. 5m-ahead uses 5m ATR; 30m-ahead uses 30m ATR.
+- Missing this/next F-bar (weekend, tail) → NaN, not 0. Same rule as T27.
+
+Old y_15m / y_1h are still computed and written, but they are not fit.
+
+Train on the last 1m of each 5m bar (one live snapshot per 5m, most developed X, still leak-free for B_{t+1}).
+
+If both heads still ≈ majority, one extra lever: **1.0×** the same HTF ATR (wider, less class-0 mush). Not a second architecture. Stop after that.
 
 ## Split
 
@@ -55,7 +66,7 @@ No class_weight. Spec: report counts, do not rebalance. `adaptive-risk` balanced
 
 ## Overlap
 
-Consecutive 1m rows share 14/15 of the 15m window. We train on every 5th row and also compare sample weights 1/15. Effective N is smaller than row count. Do not read 1.1M rows as 1.1M independent samples.
+Consecutive 1m rows of the same 5m bar share one y_5m (and 30m rows share y_30m). We train on the last 1m of each 5m bar, not on 1.1M independent samples.
 
 ## Models
 

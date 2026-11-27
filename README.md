@@ -2,7 +2,7 @@
 
 The Quantra notebooks under `Neural-Networks-in-Trading_new/` are a starting template only (course code, accuracy metric, daily BAC). Stage 1 is a new, pluggable market-state pipeline: **features → labels → policy**. Why each choice was made: comments in `holygrail/` plus `docs/stage1-plan.md`, `docs/stage1-why-notes.md`, `docs/stage1-results.md`.
 
-Outputs are calibrated 3-class probabilities (`-1 / 0 / +1`) for 15-minute and 1-hour horizons. Not trade signals. No entries, exits, sizing, or PnL.
+Outputs are calibrated 3-class probabilities (`-1 / 0 / +1`) for the **next closed 5m and 30m structure**. Not 15-minute ticks, not trade signals. No entries, exits, sizing, or PnL.
 
 ## Layout
 
@@ -18,8 +18,8 @@ data/mt5_raw/       MT5 1m CSVs (not in git; download)
 Policy contract (swap LightGBM / MLP / later RL without touching features):
 
 ```python
-policy.fit(X, y, X_val=..., y_val=...)
-policy.predict_proba(X)  # (n, 3) columns [-1, 0, +1]
+policy.fit(X, y_5m, y_30m, ...)
+policy.predict_proba(X)  # dict of (n, 3) columns [-1, 0, +1]
 policy.explain(X)
 ```
 
@@ -29,12 +29,12 @@ policy.explain(X)
 pip install -r requirements.txt
 python scripts/download_mt5.py
 python scripts/inspect_data.py
-python -m pytest tests/test_t1_t44.py -q
+python -m pytest tests/test_t1_t44.py tests/test_structure_labels.py -q
 python scripts/build_dataset.py --csv data/mt5_raw/EURUSD_M1_202101131130_202605270000_2020_2026.csv
 python scripts/train_eval.py
 ```
 
-`build_dataset.py` writes `data/processed/X_{train,val,test}.parquet` (scaled 128-col `X`), matching `y_*.parquet` (labels kept separate), and freezes `artifacts/scaler.joblib` + `artifacts/scaler.json`.
+`build_dataset.py` writes `data/processed/X_{train,val,test}.parquet` (scaled 128-col `X`), matching `y_*.parquet` (y_5m / y_30m for training; y_15m / y_1h unused comparison), and freezes `artifacts/scaler.joblib` + `artifacts/scaler.json`.
 
 ## Spec decisions
 

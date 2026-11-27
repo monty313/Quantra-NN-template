@@ -87,25 +87,34 @@ EURUSD: 1,998,262 rows → **1,986,221** with all 128 finite (warm-up + holes dr
 
 ## Step 4 — labels
 
-`y_15m`, `y_1h` in a separate parquet keyed by decision time. `label_valid_*` false when the 1m candle at t+h is missing or ATR≤0.
+**Training heads (CEO 2026-11-27):** `y_5m` and `y_30m` — next **closed** HTF structure, not a 15m tick.
 
-Threshold = 0.5 × 5m ATR14 at t. Exact ±threshold → ±1. Inside → 0.
+For every 1m inside F-bar `B_t`:
+
+- now = typical price of `B_t` once closed (shared)
+- future = typical price of `B_{t+1}` (the next F-bar; not in X)
+- threshold = **0.5 × ATR14 of that same F-bar series at `B_t`** (spec fraction; 5m ATR for 5m-ahead, 30m ATR for 30m-ahead)
+- missing this/next F-bar → NaN, not 0
+
+X is unchanged (128 cols, order, scaler rules, leak-safe timing). Old `y_15m` / `y_1h` are still written as unused comparison columns.
+
+A first draft that compared `B_{t-1}` to `B_{t+1}` (skipping the bar X is watching) put class 0 back in the majority. That is not the training definition.
 
 ---
 
 ## Step 5 — split
 
-Cutoff = timestamp of the 70% 1m row: **2024-10-11 15:14** (broker-naive). Inner val cutoff **2024-01-16 07:21**.
+Cutoff = timestamp of the 70% 1m row: **2024-10-11 15:14** (broker-naive). Inner val cutoff **2024-01-16 03:54**.
 
-After purge (1h window) + 60m embargo + both labels present:
+After purge (60m, covering next-closed 30m) + 60m embargo + both structure labels present:
 
 | Partition | n (1m) |
 |---|---|
-| train (fit) | 1,097,698 |
-| val (walk-forward tail) | 274,573 |
-| test (untouched) | 592,606 |
+| train (fit) | 1,104,925 |
+| val (walk-forward tail) | 276,188 |
+| test (untouched) | 596,634 |
 
-T28/T29: no train row's 1h window crosses cutoff; first test row ≥ 60m after cutoff.
+T28/T29: no train row's 60m window crosses cutoff; first test row ≥ 60m after cutoff. Scaler still RobustScaler on 46 gap columns, train-fit only.
 
 ---
 
@@ -120,7 +129,7 @@ RobustScaler, quantile 25–75, **train fit rows only**, exactly the 46 spec gap
 
 ## Step 7 — T1–T44
 
-`python -m pytest tests/test_t1_t44.py -q` → **36 passed**.
+`python -m pytest tests/test_t1_t44.py tests/test_structure_labels.py -q` → **43 passed** (36 T1–T44 + 7 structure-label tests: shared per F-bar, missing next bar = NaN not 0, no leak after next bar closes).
 
 Live MT5 terminal was not available. T1, T2, T12, T16, T35, T36 pass against **published MT5 formulas** (scalar vs vectorized, as-of at bar end vs closed bar). T21 passes against the spec resample rule, not an MT5 5m file.
 
@@ -173,60 +182,66 @@ Live MT5 terminal was not available. T1, T2, T12, T16, T35, T36 pass against **p
 
 ---
 
-## Modeling (after T1–T44)
+## Modeling (structure heads)
 
-**Overlap.** Train 1m n = 1,097,698. Thinned every 5th → **219,540**. Effective N ≈ n × 5/15 = **73,180** (15m) and n × 5/60 = **18,295** (1h). Consecutive 1m rows are not independent. Weighted LightGBM on the unthinned 15m train (weight 1/15) is reported too.
+X unchanged. Fit on last 1m of each 5m bar (one snapshot per 5m; shared y). No rebalance.
 
-**Class counts (thinned, no rebalance):**
+**Class counts (last 1m of each 5m, no rebalance):**
 
-| Split | Horizon | −1 | 0 | +1 |
+| Split | Head | −1 | 0 | +1 |
 |---|---|---|---|---|
-| train | 15m | 67,924 | 83,425 | 68,191 |
-| train | 1h | 88,405 | 43,084 | 88,051 |
-| val | 15m | 16,921 | 20,268 | 17,726 |
-| val | 1h | 21,425 | 10,740 | 22,750 |
-| test | 15m | 36,519 | 45,018 | 36,985 |
-| test | 1h | 47,104 | 23,741 | 47,677 |
+| train | y_5m | 33,267 | 154,794 | 33,151 |
+| train | y_30m | 30,348 | 161,491 | 29,373 |
+| test | y_5m | 17,755 | 83,764 | 17,884 |
+| test | y_30m | 15,734 | 87,685 | 15,984 |
 
-15m is often flat (0 is the mode). 1h is more often a move.
+Class 0 is still the mode (~70% on 5m, ~73% on 30m). Adjacent-bar typical-price changes often sit inside 0.5× that bar’s ATR. 1.0× ATR would make 0 even larger, so it was not used as the extra lever.
 
-### Test metrics (untouched newest 30%, thinned every 5)
+### Test metrics vs old 15m/1h tick heads
+
+Old tick heads (copied from the previous run; not retrained):
 
 | Model | Horizon | log loss | ECE | macro F1 |
 |---|---|---|---|---|
-| majority (class prior) | 15m | 1.0938 | 0.0002 | 0.184 |
-| logistic | 15m | 1.0920 | 0.0038 | 0.262 |
-| LightGBM | 15m | 1.0909 | 0.0016 | 0.257 |
-| MLP | 15m | 1.0913 | 0.0031 | 0.289 |
-| LGBM weighted | 15m | **1.0906** | — | — |
-| majority | 1h | 1.0552 | 0.0053 | 0.190 |
-| logistic | 1h | 1.0551 | 0.0166 | 0.304 |
-| LightGBM | 1h | **1.0543** | 0.0081 | 0.303 |
-| MLP | 1h | 1.0547 | 0.0089 | 0.304 |
+| majority | 15m tick | 1.0938 | 0.0002 | 0.184 |
+| logistic | 15m tick | 1.0920 | 0.0038 | 0.262 |
+| LightGBM | 15m tick | 1.0909 | 0.0016 | 0.257 |
+| MLP | 15m tick | 1.0913 | 0.0031 | 0.289 |
+| majority | 1h tick | 1.0552 | 0.0053 | 0.190 |
+| LightGBM | 1h tick | 1.0543 | 0.0081 | 0.303 |
 
-**MLP vs logistic:** MLP **does** beat logistic on test log loss (15m 1.0913 < 1.0920; 1h 1.0547 < 1.0551). The gap is tiny. LightGBM is slightly best on log loss. Nobody is a strong predictor.
+New structure heads (this run, last 1m of each 5m):
 
-15m models mostly predict **0** (flat): LGBM recall on 0 is 0.90, on ±1 about 0.06–0.07. 1h models ignore 0 (LGBM F1 on 0 is 0) and split ±1 at ~0.51 recall. That is a weak directional lean, not a trading signal.
+| Model | Head | log loss | ECE | macro F1 |
+|---|---|---|---|---|
+| majority | y_5m | 0.8165 | 0.0018 | 0.275 |
+| **logistic** | **y_5m** | **0.7410** | 0.0146 | 0.322 |
+| LightGBM | y_5m | 0.7521 | 0.0037 | 0.305 |
+| MLP | y_5m | 0.7482 | 0.0065 | 0.298 |
+| majority | y_30m | 0.7631 | 0.0043 | 0.282 |
+| logistic | y_30m | 0.7434 | 0.0131 | 0.293 |
+| **LightGBM** | **y_30m** | **0.7300** | 0.0053 | 0.296 |
+| MLP | y_30m | 0.7323 | 0.0179 | 0.291 |
 
-Calibration (ECE) is already tight because probabilities stay near the class prior. Majority ECE looks “best” because it never pretends to be sharp.
+Logloss is **not** ≈ majority: 5m logistic beats the class prior by **0.075**; 30m LightGBM by **0.033**. That is the mismatch fix. The old 15m head only beat majority by ~0.003.
 
-### Regime slices (LightGBM, test, not tuned)
+Argmax still collapses to 0 (logistic 5m recall on ±1 ≈ 0.037; on 0 ≈ 0.99). Probabilities move; hard class does not. MLP does **not** beat logistic on 5m logloss; it does on 30m, barely.
 
-High vs low 5m ATR (median split) and trending vs not (`|s714_label|=1`). Log loss barely moves (15m 1.090–1.092; 1h 1.051–1.058). No hidden pocket of skill on this split.
+**Extra lever:** skipped. Rule was “if still ≈ majority, try one more.” Logloss is not ≈ majority, so we did not run 1.0× ATR or drop-class-0. (1.0× ATR was precomputed: it makes class 0 ~93%.)
 
-### Explainability (val, 15m)
+### Regime slices (LightGBM, test)
 
-SHAP mean |value| by block (LightGBM): **ladder 0.064**, sma_chain 0.039, CCI 0.037, RSI 0.037, bbsma 0.030, std 0.024, sma714 0.011, price-vs-SMA20 0.004.
+5m logloss stays in 0.746–0.762 across high/low ATR and trending/not. 30m low-ATR is easier (0.649 vs high-ATR 0.811) — quieter 30m bars are more often labeled 0, which the model already predicts.
 
-Top columns: `lad_g1_5m`, `sma_cd_gap_30m`, `bbs_mid_gap_5m`, `lad_g2_5m`, `rsi3_dist50_5m`.
+### Explainability (val, y_5m)
 
-MLP permutation log-loss increase: CCI block largest, then bbsma, then ladder. Same story — small numbers.
+SHAP mean |value| by block (LightGBM): **ladder 0.387**, bbsma 0.230, RSI 0.188, CCI 0.138, sma_chain 0.039, std 0.031, price-vs-SMA20 0.026, sma714 0.012.
 
-Drop-one-block ablation on val LightGBM: full log loss 1.0920. Removing ladder hurts most (+0.00032). Removing sma_chain or price-vs-SMA20 slightly *helps* (those blocks are noisy at this horizon). No block is doing real work by itself.
+Drop-one-block ablation on val LightGBM: full 0.763. Removing bbsma hurts most (+0.0042), then ladder (+0.0027). Same indicator family as X — unlike the 15m tick run, blocks actually move the loss.
 
-**Read this as:** the 128-col state is internally consistent and leak-safe. It is only a weak predictor of the next 15m/1h typical-price move vs 0.5×5m ATR. That is a Stage 1 finding, not a failed build. Stage 2 (policy) is out of scope.
+**Read this as:** asking the 128-col developing state to predict the **next closed 5m/30m typical-price direction vs 0.5× same-HTF ATR** is a real (still modest) probability skill. It is not a trade signal. Stage 2 stays out of scope.
 
-Raw JSON: `artifacts/train_results.json` in the repo.
+Raw JSON: `artifacts/train_results.json` (new heads). Old tick metrics: `artifacts/train_results_old_15m_1h.json`.
 
 ---
 
@@ -235,9 +250,9 @@ Raw JSON: `artifacts/train_results.json` in the repo.
 ```bash
 pip install -r requirements.txt
 python scripts/download_mt5.py
-python -m pytest tests/test_t1_t44.py -q
+python -m pytest tests/test_t1_t44.py tests/test_structure_labels.py -q
 python scripts/build_dataset.py --csv data/mt5_raw/EURUSD_M1_202101131130_202605270000_2020_2026.csv
 python scripts/train_eval.py
 ```
 
-Policy: `fit(X, y)` / `predict_proba(X)` → (n, 3) columns [−1, 0, +1] / `explain(X)`.
+Policy: `fit(X, y_5m, y_30m)` / `predict_proba(X)` → dict of (n, 3) columns [−1, 0, +1] / `explain(X)`.

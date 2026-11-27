@@ -1,9 +1,9 @@
 """Time-ordered 70/30 split with purge and 60-minute embargo (spec §13).
 
 Why not sklearn TimeSeriesSplit alone (svm-ftmo): consecutive 1m rows share
-almost the same 15m/1h future window. Without purge, a train row's label
-sees test-period prices. Without embargo, the first test row is 1 minute
-after the last train row and is not independent.
+the same next-closed HTF label (and used to share a 15m/1h tick window).
+Without purge, a train row's label sees test-period prices. Without embargo,
+the first test row is 1 minute after the last train row and is not independent.
 
 Why not class_weight='balanced' (adaptive-risk): the spec says report class
 counts and do not rebalance. Balancing makes logloss/calibration incomparable

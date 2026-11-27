@@ -1,15 +1,15 @@
 # Stage 1 market-state model — plan
 
-Status: done on `cursor/stage1-market-state-a365`. T1–T44 green (36 tests). EURUSD train/eval in `artifacts/train_results.json` and `docs/stage1-results.md`. Why-notes in this file, `docs/stage1-why-notes.md`, and `holygrail/` module docs.
+Status: done on `cursor/stage1-market-state-a365`. T1–T44 + structure-label tests green (43). Training heads are next-closed **5m / 30m** structure (`y_15m`/`y_1h` unused comparison). EURUSD train/eval in `artifacts/train_results.json` and `docs/stage1-results.md`.
 
 ## Goal
 
-Learn market structure from a 128-column observation matrix `X` plus two 3-class targets (`y_15m`, `y_1h`). Outputs are calibrated state probabilities, not trades.
+Learn market structure from a 128-column observation matrix `X` plus two 3-class **structure** targets (`y_5m`, `y_30m`: next closed HTF direction). Old `y_15m` / `y_1h` tick heads are unused comparison columns. Outputs are calibrated state probabilities, not trades.
 
 ## Layers
 
 1. Feature pipeline (`holygrail/`): 1m MT5 → developing 5m/30m/1h → 128-col `X` + validity.
-2. Labels: `y_15m` / `y_1h` stored separately.
+2. Labels: `y_5m` / `y_30m` training heads stored separately; `y_15m` / `y_1h` kept for comparison.
 3. Pluggable policy: `fit(X, y)` / `predict_proba(X)` / `explain(X)`.
 
 ## Data (Step 0)

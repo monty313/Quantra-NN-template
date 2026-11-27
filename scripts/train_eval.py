@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train majority / logistic / LightGBM / MLP. Report logloss, ECE, F1, regimes, explain."""
+"""Train majority / logistic / LightGBM / MLP on structure heads y_5m / y_30m."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import numpy as np
 import pandas as pd
 
-from holygrail.columns import BLOCKS, FEATURE_COLUMNS
+from holygrail.columns import FEATURE_COLUMNS
 from holygrail.models.explain import ablation_drop_block, block_aggregate, permutation_importance, shap_tree
 from holygrail.models.lgbm import LightGBMPolicy
 from holygrail.models.logistic import LogisticPolicy
@@ -22,6 +22,8 @@ from holygrail.models.metrics import evaluate
 from holygrail.models.mlp import MLPPolicy
 from holygrail.policy import DualHead
 
+NEAR_MAJORITY_LOGLOSS = 0.01  # extra lever if best-majority < this
+
 
 def load_part(root: Path, name: str):
     X = pd.read_parquet(root / f"X_{name}.parquet")
@@ -29,37 +31,62 @@ def load_part(root: Path, name: str):
     return X[FEATURE_COLUMNS], y
 
 
-def thin(X, y, step: int):
-    sl = slice(None, None, step)
-    return X.iloc[sl], y.iloc[sl]
-
-
-def overlap_weights(index: pd.Series, horizon_min: int) -> np.ndarray:
-    """Down-weight overlapping 1m rows: each window of `horizon` shares mass 1."""
-    # simple: weight = 1/horizon so effective N ≈ n / horizon at 1m stride
-    return np.full(len(index), 1.0 / horizon_min, dtype=np.float64)
-
-
-def regime_masks(yframe: pd.DataFrame, X: pd.DataFrame) -> dict[str, np.ndarray]:
-    atr = yframe["atr_5m"].to_numpy()
-    med = np.nanmedian(atr)
-    high = atr >= med
-    low = ~high
-    # trending: |s714_label| == 1 (all TFs same SMA7 vs 14 lean)
-    trend = np.abs(X["s714_label"].to_numpy()) == 1
-    chop = ~trend
-    return {"high_atr": high, "low_atr": low, "trending": trend, "not_trending": chop}
+def last5(X, y):
+    m = y["last_1m_of_5m"].to_numpy().astype(bool)
+    return X.loc[m], y.loc[m]
 
 
 def eval_head(name, y_true, proba) -> dict:
     return {"model": name, **evaluate(y_true, proba)}
 
 
+def near_majority(report_models: dict, head: str) -> bool:
+    maj = report_models["majority"][head]["log_loss"]
+    best = min(
+        report_models[k][head]["log_loss"]
+        for k in ("logistic", "lightgbm", "mlp")
+        if k in report_models and head in report_models[k]
+    )
+    return (maj - best) < NEAR_MAJORITY_LOGLOSS
+
+
+def fit_suite(Xtr, ytr_ltf, ytr_htf, Xva, yva_ltf, yva_htf, Xte, yte_ltf, yte_htf, ltf_key, htf_key):
+    makers = {
+        "majority": MajorityPolicy,
+        "logistic": LogisticPolicy,
+        "lightgbm": LightGBMPolicy,
+        "mlp": MLPPolicy,
+    }
+    fitted = {}
+    models = {}
+    for key, maker in makers.items():
+        print("fit", key, ltf_key, htf_key, flush=True)
+        dual = DualHead(maker, ltf_key=ltf_key, htf_key=htf_key)
+        dual.fit(
+            Xtr,
+            ytr_ltf,
+            ytr_htf,
+            X_val=Xva,
+            y_ltf_val=yva_ltf,
+            y_htf_val=yva_htf,
+        )
+        fitted[key] = dual
+        proba = dual.predict_proba(Xte)
+        pva = dual.predict_proba(Xva)
+        models[key] = {
+            f"test_{ltf_key}": eval_head(key, yte_ltf, proba[ltf_key]),
+            f"test_{htf_key}": eval_head(key, yte_htf, proba[htf_key]),
+            f"val_{ltf_key}": eval_head(key, yva_ltf, pva[ltf_key]),
+            f"val_{htf_key}": eval_head(key, yva_htf, pva[htf_key]),
+        }
+    return fitted, models
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--data", default="data/processed")
     p.add_argument("--out", default="artifacts/train_results.json")
-    p.add_argument("--thin-step", type=int, default=5)
+    p.add_argument("--old-results", default="artifacts/train_results.json")
     p.add_argument("--shap-rows", type=int, default=1500)
     args = p.parse_args()
     root = Path(args.data)
@@ -67,92 +94,119 @@ def main() -> None:
     Xva, yva = load_part(root, "val")
     Xte, yte = load_part(root, "test")
 
-    Xtr_t, ytr_t = thin(Xtr, ytr, args.thin_step)
-    Xva_t, yva_t = thin(Xva, yva, args.thin_step)
-    Xte_t, yte_t = thin(Xte, yte, args.thin_step)
+    # One snapshot per 5m bar (last 1m). Shared labels; live_1m X still used.
+    Xtr_t, ytr_t = last5(Xtr, ytr)
+    Xva_t, yva_t = last5(Xva, yva)
+    Xte_t, yte_t = last5(Xte, yte)
 
-    n_full = len(Xtr)
-    n_thin = len(Xtr_t)
+    old = {}
+    old_path = Path(args.old_results)
+    # Read previous tick-head metrics if this file still has them (first run of this script overwrites).
+    prev_copy = Path("artifacts/train_results_old_15m_1h.json")
+    if prev_copy.exists():
+        old = json.loads(prev_copy.read_text(encoding="utf-8"))
+    elif old_path.exists():
+        prev = json.loads(old_path.read_text(encoding="utf-8"))
+        if prev.get("models", {}).get("majority", {}).get("test_15m"):
+            old = prev
+            prev_copy.write_text(json.dumps(prev, indent=2, default=str), encoding="utf-8")
+
     report = {
+        "primary_heads": ["y_5m", "y_30m"],
         "overlap": {
-            "n_train_1m": n_full,
-            "n_train_thinned_every_5": n_thin,
-            "effective_n_15m_thinned": n_thin * (args.thin_step / 15.0),
-            "effective_n_1h_thinned": n_thin * (args.thin_step / 60.0),
-            "note": "consecutive 1m rows share 14/15 of the 15m window. Thinning every 5m still overlaps. Effective N ≈ n * step / horizon.",
+            "n_train_1m": len(Xtr),
+            "n_train_last_1m_of_5m": len(Xtr_t),
+            "n_val_last_1m_of_5m": len(Xva_t),
+            "n_test_last_1m_of_5m": len(Xte_t),
+            "note": "y_5m/y_30m are shared across 1m rows of the same F-bar. Train on last 1m of each 5m.",
         },
         "class_counts": {
-            "train_15m": ytr_t["y_15m"].value_counts().sort_index().to_dict(),
-            "train_1h": ytr_t["y_1h"].value_counts().sort_index().to_dict(),
-            "val_15m": yva_t["y_15m"].value_counts().sort_index().to_dict(),
-            "val_1h": yva_t["y_1h"].value_counts().sort_index().to_dict(),
-            "test_15m": yte_t["y_15m"].value_counts().sort_index().to_dict(),
-            "test_1h": yte_t["y_1h"].value_counts().sort_index().to_dict(),
+            "train_5m": ytr_t["y_5m"].value_counts().sort_index().to_dict(),
+            "train_30m": ytr_t["y_30m"].value_counts().sort_index().to_dict(),
+            "val_5m": yva_t["y_5m"].value_counts().sort_index().to_dict(),
+            "val_30m": yva_t["y_30m"].value_counts().sort_index().to_dict(),
+            "test_5m": yte_t["y_5m"].value_counts().sort_index().to_dict(),
+            "test_30m": yte_t["y_30m"].value_counts().sort_index().to_dict(),
+            "train_15m_comparison": ytr_t["y_15m"].value_counts().sort_index().to_dict(),
+            "train_1h_comparison": ytr_t["y_1h"].value_counts().sort_index().to_dict(),
+        },
+        "old_labels_15m_1h": {
+            "note": "previous Stage-1 tick heads, not retrained. Copied for comparison.",
+            "models": old.get("models", {}),
         },
         "models": {},
         "regimes": {},
         "explain": {},
+        "extra_experiment": None,
     }
 
-    makers = {
-        "majority": MajorityPolicy,
-        "logistic": LogisticPolicy,
-        "lightgbm": LightGBMPolicy,
-        "mlp": MLPPolicy,
-    }
+    fitted, models = fit_suite(
+        Xtr_t,
+        ytr_t["y_5m"].to_numpy(),
+        ytr_t["y_30m"].to_numpy(),
+        Xva_t,
+        yva_t["y_5m"].to_numpy(),
+        yva_t["y_30m"].to_numpy(),
+        Xte_t,
+        yte_t["y_5m"].to_numpy(),
+        yte_t["y_30m"].to_numpy(),
+        "y_5m",
+        "y_30m",
+    )
+    report["models"] = models
+    report["mlp_beats_logistic_5m"] = bool(
+        models["mlp"]["test_y_5m"]["log_loss"] < models["logistic"]["test_y_5m"]["log_loss"]
+    )
+    report["mlp_beats_logistic_30m"] = bool(
+        models["mlp"]["test_y_30m"]["log_loss"] < models["logistic"]["test_y_30m"]["log_loss"]
+    )
+    report["near_majority_5m"] = near_majority(models, "test_y_5m")
+    report["near_majority_30m"] = near_majority(models, "test_y_30m")
 
-    fitted = {}
-    for key, maker in makers.items():
-        print("fit", key, flush=True)
-        dual = DualHead(maker)
-        dual.fit(
-            Xtr_t,
-            ytr_t["y_15m"].to_numpy(),
-            ytr_t["y_1h"].to_numpy(),
-            X_val=Xva_t,
-            y_15m_val=yva_t["y_15m"].to_numpy(),
-            y_1h_val=yva_t["y_1h"].to_numpy(),
+    # Extra lever if still ≈ majority: 1.0× ATR (wider, less class-0 mush), same split/X.
+    if report["near_majority_5m"] and report["near_majority_30m"]:
+        print("near majority on both heads — extra lever: 1.0× same-HTF ATR", flush=True)
+        wtr = ytr_t["label_valid_5m_wide"].to_numpy() & ytr_t["label_valid_30m_wide"].to_numpy()
+        wva = yva_t["label_valid_5m_wide"].to_numpy() & yva_t["label_valid_30m_wide"].to_numpy()
+        wte = yte_t["label_valid_5m_wide"].to_numpy() & yte_t["label_valid_30m_wide"].to_numpy()
+        _, wide_models = fit_suite(
+            Xtr_t.loc[wtr],
+            ytr_t.loc[wtr, "y_5m_wide"].to_numpy(),
+            ytr_t.loc[wtr, "y_30m_wide"].to_numpy(),
+            Xva_t.loc[wva],
+            yva_t.loc[wva, "y_5m_wide"].to_numpy(),
+            yva_t.loc[wva, "y_30m_wide"].to_numpy(),
+            Xte_t.loc[wte],
+            yte_t.loc[wte, "y_5m_wide"].to_numpy(),
+            yte_t.loc[wte, "y_30m_wide"].to_numpy(),
+            "y_5m_wide",
+            "y_30m_wide",
         )
-        fitted[key] = dual
-        proba = dual.predict_proba(Xte_t)
-        report["models"][key] = {
-            "test_15m": eval_head(key, yte_t["y_15m"].to_numpy(), proba["y_15m"]),
-            "test_1h": eval_head(key, yte_t["y_1h"].to_numpy(), proba["y_1h"]),
-            "val_15m": eval_head(key, yva_t["y_15m"].to_numpy(), dual.predict_proba(Xva_t)["y_15m"]),
-            "val_1h": eval_head(key, yva_t["y_1h"].to_numpy(), dual.predict_proba(Xva_t)["y_1h"]),
+        report["extra_experiment"] = {
+            "lever": "STRUCTURE_WIDE_ATR_FRACTION=1.0 (same HTF ATR, still 3-class)",
+            "class_counts_train_5m_wide": ytr_t.loc[wtr, "y_5m_wide"].value_counts().sort_index().to_dict(),
+            "class_counts_train_30m_wide": ytr_t.loc[wtr, "y_30m_wide"].value_counts().sort_index().to_dict(),
+            "models": wide_models,
+            "near_majority_5m_wide": near_majority(wide_models, "test_y_5m_wide"),
+            "near_majority_30m_wide": near_majority(wide_models, "test_y_30m_wide"),
+        }
+    else:
+        report["extra_experiment"] = {
+            "skipped": True,
+            "reason": "primary 0.5× ATR heads beat majority by more than 0.01 logloss on at least one head",
         }
 
-    # Weighted LGBM on unthinned train vs thinned (15m head only, for the overlap comparison)
-    print("fit lightgbm weighted (unthinned, 15m)", flush=True)
-    w = overlap_weights(ytr["decision_time"], 15)
-    lgb_w = LightGBMPolicy()
-    lgb_w.fit(
-        Xtr,
-        ytr["y_15m"].to_numpy(),
-        sample_weight=w,
-        X_val=Xva_t,
-        y_val=yva_t["y_15m"].to_numpy(),
-    )
-    report["models"]["lightgbm_weighted_15m"] = {
-        "test_15m": eval_head(
-            "lightgbm_weighted",
-            yte_t["y_15m"].to_numpy(),
-            lgb_w.predict_proba(Xte_t),
-        )
-    }
-
-    mlp_ll = report["models"]["mlp"]["test_15m"]["log_loss"]
-    log_ll = report["models"]["logistic"]["test_15m"]["log_loss"]
-    report["mlp_beats_logistic_15m"] = bool(mlp_ll < log_ll)
-    report["mlp_beats_logistic_1h"] = bool(
-        report["models"]["mlp"]["test_1h"]["log_loss"] < report["models"]["logistic"]["test_1h"]["log_loss"]
-    )
-
-    # Regime slices on test, using LightGBM (not tuned on test)
     lgb = fitted["lightgbm"]
-    masks = regime_masks(yte_t, Xte_t)
+    atr = yte_t["atr_5m"].to_numpy()
+    med = np.nanmedian(atr)
+    masks = {
+        "high_atr": atr >= med,
+        "low_atr": atr < med,
+        "trending": np.abs(Xte_t["s714_label"].to_numpy()) == 1,
+        "not_trending": np.abs(Xte_t["s714_label"].to_numpy()) != 1,
+    }
     proba = lgb.predict_proba(Xte_t)
-    for horizon, ycol, pkey in (("15m", "y_15m", "y_15m"), ("1h", "y_1h", "y_1h")):
+    for horizon, ycol, pkey in (("5m", "y_5m", "y_5m"), ("30m", "y_30m", "y_30m")):
         report["regimes"][horizon] = {}
         for rname, mask in masks.items():
             if mask.sum() < 50:
@@ -161,33 +215,34 @@ def main() -> None:
                 yte_t[ycol].to_numpy()[mask], proba[pkey][mask]
             )
 
-    # Explain: SHAP on LGBM val, permutation on MLP val, block ablation on LGBM val
     print("explain", flush=True)
-    shap15 = shap_tree(lgb.head_15m, Xva_t, max_rows=args.shap_rows)
+    shap15 = shap_tree(lgb.head_ltf, Xva_t, max_rows=args.shap_rows)
     col_shap = dict(zip(shap15["columns"], shap15["mean_abs_shap"]))
-    report["explain"]["lgbm_shap_15m_columns"] = col_shap
-    report["explain"]["lgbm_shap_15m_blocks"] = block_aggregate(col_shap)
+    report["explain"]["lgbm_shap_5m_columns"] = col_shap
+    report["explain"]["lgbm_shap_5m_blocks"] = block_aggregate(col_shap)
 
+    nperm = min(2000, len(Xva_t))
     perm = permutation_importance(
-        fitted["mlp"].head_15m, Xva_t.iloc[: min(2000, len(Xva_t))], yva_t["y_15m"].to_numpy()[: min(2000, len(Xva_t))], n_repeats=1
+        fitted["mlp"].head_ltf, Xva_t.iloc[:nperm], yva_t["y_5m"].to_numpy()[:nperm], n_repeats=1
     )
     col_perm = dict(zip(perm["columns"], perm["log_loss_increase"]))
-    report["explain"]["mlp_perm_15m_columns"] = col_perm
-    report["explain"]["mlp_perm_15m_blocks"] = block_aggregate(col_perm)
+    report["explain"]["mlp_perm_5m_columns"] = col_perm
+    report["explain"]["mlp_perm_5m_blocks"] = block_aggregate(col_perm)
 
-    report["explain"]["lgbm_ablation_val_15m"] = ablation_drop_block(
+    report["explain"]["lgbm_ablation_val_5m"] = ablation_drop_block(
         LightGBMPolicy,
         Xtr_t,
-        ytr_t["y_15m"].to_numpy(),
+        ytr_t["y_5m"].to_numpy(),
         Xva_t,
-        yva_t["y_15m"].to_numpy(),
+        yva_t["y_5m"].to_numpy(),
     )
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
     print("wrote", args.out)
-    print("mlp_beats_logistic_15m", report["mlp_beats_logistic_15m"])
-    print("mlp_beats_logistic_1h", report["mlp_beats_logistic_1h"])
+    print("near_majority_5m", report["near_majority_5m"], "near_majority_30m", report["near_majority_30m"])
+    print("mlp_beats_logistic_5m", report["mlp_beats_logistic_5m"])
+    print("mlp_beats_logistic_30m", report["mlp_beats_logistic_30m"])
 
 
 if __name__ == "__main__":

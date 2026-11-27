@@ -341,6 +341,7 @@ def test_T24_no_answers_in_X(m1_short):
     ft = build_features(m1_short)
     assert ft.X.shape[1] == 128
     assert "y_15m" not in ft.X.columns and "y_1h" not in ft.X.columns
+    assert "y_5m" not in ft.X.columns and "y_30m" not in ft.X.columns
 
 
 # ----- T25 / T26 / T27 labels -----
