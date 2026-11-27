@@ -4,9 +4,9 @@ Why separate: if y sits in the same frame as X, it is too easy to scale it or
 fit on it (a Quantra/sklearn pipeline habit). Answers describe what happened
 after t; they are not features.
 
-Primary Stage-1 heads (CEO 2026-11-27): next **closed** 5m and 30m structure
-direction. X is live_1m + developing 5m/30m/1h — a 15m 1m-tick vs 5m ATR
-asks a different question than the features describe.
+Primary Stage-1 heads: next **closed** 5m, 30m, and 1h structure direction.
+X is live_1m + developing 5m/30m/1h — a 15m 1m-tick vs 5m ATR asks a
+different question than the features describe.
 
 For each F-bar family (shared across every 1m inside the current F-bar):
 - now = typical price of **this** F-bar when it has closed (B_t). Labels may
@@ -56,12 +56,13 @@ class LabelTable:
     threshold: np.ndarray  # 0.5 * ATR14_5m at t (old heads)
     y_5m: np.ndarray
     y_30m: np.ndarray
-    y_1h_struct: np.ndarray
+    y_1h_structure: np.ndarray
     label_valid_5m: np.ndarray
     label_valid_30m: np.ndarray
-    label_valid_1h_struct: np.ndarray
+    label_valid_1h_structure: np.ndarray
     threshold_5m: np.ndarray
     threshold_30m: np.ndarray
+    threshold_1h: np.ndarray
     y_5m_wide: np.ndarray  # 1.0× ATR extra lever
     y_30m_wide: np.ndarray
     label_valid_5m_wide: np.ndarray
@@ -143,7 +144,7 @@ def build_labels(m1: pd.DataFrame, features: FeatureTable) -> LabelTable:
     y60, v60 = one_tick_horizon(LABEL_HORIZONS_MIN[1])
     y5, v5, th5 = structure_direction(m1, "5m", STRUCTURE_ATR_FRACTION)
     y30, v30, th30 = structure_direction(m1, "30m", STRUCTURE_ATR_FRACTION)
-    y1h_s, v1h_s, _ = structure_direction(m1, "1h", STRUCTURE_ATR_FRACTION)
+    y1h_s, v1h_s, th1h = structure_direction(m1, "1h", STRUCTURE_ATR_FRACTION)
     y5w, v5w, _ = structure_direction(m1, "5m", STRUCTURE_WIDE_ATR_FRACTION)
     y30w, v30w, _ = structure_direction(m1, "30m", STRUCTURE_WIDE_ATR_FRACTION)
     return LabelTable(
@@ -154,12 +155,13 @@ def build_labels(m1: pd.DataFrame, features: FeatureTable) -> LabelTable:
         threshold=threshold,
         y_5m=y5,
         y_30m=y30,
-        y_1h_struct=y1h_s,
+        y_1h_structure=y1h_s,
         label_valid_5m=v5,
         label_valid_30m=v30,
-        label_valid_1h_struct=v1h_s,
+        label_valid_1h_structure=v1h_s,
         threshold_5m=th5,
         threshold_30m=th30,
+        threshold_1h=th1h,
         y_5m_wide=y5w,
         y_30m_wide=y30w,
         label_valid_5m_wide=v5w,

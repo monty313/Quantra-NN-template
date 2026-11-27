@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train majority / logistic / LightGBM / MLP on structure heads y_5m / y_30m."""
+"""Train majority / logistic / LightGBM / MLP on y_5m, y_30m, y_1h_structure."""
 
 from __future__ import annotations
 
@@ -20,9 +20,9 @@ from holygrail.models.logistic import LogisticPolicy
 from holygrail.models.majority import MajorityPolicy
 from holygrail.models.metrics import evaluate
 from holygrail.models.mlp import MLPPolicy
-from holygrail.policy import DualHead
+from holygrail.policy import MultiHead
 
-NEAR_MAJORITY_LOGLOSS = 0.01  # extra lever if best-majority < this
+HEADS = ("y_5m", "y_30m", "y_1h_structure")
 
 
 def load_part(root: Path, name: str):
@@ -40,17 +40,11 @@ def eval_head(name, y_true, proba) -> dict:
     return {"model": name, **evaluate(y_true, proba)}
 
 
-def near_majority(report_models: dict, head: str) -> bool:
-    maj = report_models["majority"][head]["log_loss"]
-    best = min(
-        report_models[k][head]["log_loss"]
-        for k in ("logistic", "lightgbm", "mlp")
-        if k in report_models and head in report_models[k]
-    )
-    return (maj - best) < NEAR_MAJORITY_LOGLOSS
+def ys_from(frame: pd.DataFrame) -> dict:
+    return {k: frame[k].to_numpy() for k in HEADS}
 
 
-def fit_suite(Xtr, ytr_ltf, ytr_htf, Xva, yva_ltf, yva_htf, Xte, yte_ltf, yte_htf, ltf_key, htf_key):
+def fit_suite(Xtr, ytr, Xva, yva, Xte, yte):
     makers = {
         "majority": MajorityPolicy,
         "logistic": LogisticPolicy,
@@ -59,26 +53,18 @@ def fit_suite(Xtr, ytr_ltf, ytr_htf, Xva, yva_ltf, yva_htf, Xte, yte_ltf, yte_ht
     }
     fitted = {}
     models = {}
+    ytr_d, yva_d, yte_d = ys_from(ytr), ys_from(yva), ys_from(yte)
     for key, maker in makers.items():
-        print("fit", key, ltf_key, htf_key, flush=True)
-        dual = DualHead(maker, ltf_key=ltf_key, htf_key=htf_key)
-        dual.fit(
-            Xtr,
-            ytr_ltf,
-            ytr_htf,
-            X_val=Xva,
-            y_ltf_val=yva_ltf,
-            y_htf_val=yva_htf,
-        )
-        fitted[key] = dual
-        proba = dual.predict_proba(Xte)
-        pva = dual.predict_proba(Xva)
-        models[key] = {
-            f"test_{ltf_key}": eval_head(key, yte_ltf, proba[ltf_key]),
-            f"test_{htf_key}": eval_head(key, yte_htf, proba[htf_key]),
-            f"val_{ltf_key}": eval_head(key, yva_ltf, pva[ltf_key]),
-            f"val_{htf_key}": eval_head(key, yva_htf, pva[htf_key]),
-        }
+        print("fit", key, HEADS, flush=True)
+        mh = MultiHead(maker, keys=HEADS)
+        mh.fit(Xtr, ytr_d, X_val=Xva, ys_val=yva_d)
+        fitted[key] = mh
+        proba = mh.predict_proba(Xte)
+        pva = mh.predict_proba(Xva)
+        models[key] = {}
+        for h in HEADS:
+            models[key][f"test_{h}"] = eval_head(key, yte_d[h], proba[h])
+            models[key][f"val_{h}"] = eval_head(key, yva_d[h], pva[h])
     return fitted, models
 
 
@@ -86,7 +72,6 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--data", default="data/processed")
     p.add_argument("--out", default="artifacts/train_results.json")
-    p.add_argument("--old-results", default="artifacts/train_results.json")
     p.add_argument("--shap-rows", type=int, default=1500)
     args = p.parse_args()
     root = Path(args.data)
@@ -94,107 +79,47 @@ def main() -> None:
     Xva, yva = load_part(root, "val")
     Xte, yte = load_part(root, "test")
 
-    # One snapshot per 5m bar (last 1m). Shared labels; live_1m X still used.
     Xtr_t, ytr_t = last5(Xtr, ytr)
     Xva_t, yva_t = last5(Xva, yva)
     Xte_t, yte_t = last5(Xte, yte)
 
-    old = {}
-    old_path = Path(args.old_results)
-    # Read previous tick-head metrics if this file still has them (first run of this script overwrites).
+    old_tick = {}
     prev_copy = Path("artifacts/train_results_old_15m_1h.json")
     if prev_copy.exists():
-        old = json.loads(prev_copy.read_text(encoding="utf-8"))
-    elif old_path.exists():
-        prev = json.loads(old_path.read_text(encoding="utf-8"))
-        if prev.get("models", {}).get("majority", {}).get("test_15m"):
-            old = prev
-            prev_copy.write_text(json.dumps(prev, indent=2, default=str), encoding="utf-8")
+        old_tick = json.loads(prev_copy.read_text(encoding="utf-8"))
 
     report = {
-        "primary_heads": ["y_5m", "y_30m"],
+        "primary_heads": list(HEADS),
         "overlap": {
             "n_train_1m": len(Xtr),
             "n_train_last_1m_of_5m": len(Xtr_t),
             "n_val_last_1m_of_5m": len(Xva_t),
             "n_test_last_1m_of_5m": len(Xte_t),
-            "note": "y_5m/y_30m are shared across 1m rows of the same F-bar. Train on last 1m of each 5m.",
+            "note": "Structure labels shared per F-bar. Train on last 1m of each 5m.",
         },
         "class_counts": {
-            "train_5m": ytr_t["y_5m"].value_counts().sort_index().to_dict(),
-            "train_30m": ytr_t["y_30m"].value_counts().sort_index().to_dict(),
-            "val_5m": yva_t["y_5m"].value_counts().sort_index().to_dict(),
-            "val_30m": yva_t["y_30m"].value_counts().sort_index().to_dict(),
-            "test_5m": yte_t["y_5m"].value_counts().sort_index().to_dict(),
-            "test_30m": yte_t["y_30m"].value_counts().sort_index().to_dict(),
-            "train_15m_comparison": ytr_t["y_15m"].value_counts().sort_index().to_dict(),
-            "train_1h_comparison": ytr_t["y_1h"].value_counts().sort_index().to_dict(),
+            f"{split}_{head}": frame[head].value_counts().sort_index().to_dict()
+            for split, frame in (("train", ytr_t), ("val", yva_t), ("test", yte_t))
+            for head in HEADS
         },
         "old_labels_15m_1h": {
-            "note": "previous Stage-1 tick heads, not retrained. Copied for comparison.",
-            "models": old.get("models", {}),
+            "note": "previous Stage-1 tick heads, not retrained.",
+            "models": old_tick.get("models", {}),
         },
         "models": {},
         "regimes": {},
         "explain": {},
-        "extra_experiment": None,
     }
 
-    fitted, models = fit_suite(
-        Xtr_t,
-        ytr_t["y_5m"].to_numpy(),
-        ytr_t["y_30m"].to_numpy(),
-        Xva_t,
-        yva_t["y_5m"].to_numpy(),
-        yva_t["y_30m"].to_numpy(),
-        Xte_t,
-        yte_t["y_5m"].to_numpy(),
-        yte_t["y_30m"].to_numpy(),
-        "y_5m",
-        "y_30m",
-    )
+    fitted, models = fit_suite(Xtr_t, ytr_t, Xva_t, yva_t, Xte_t, yte_t)
     report["models"] = models
-    report["mlp_beats_logistic_5m"] = bool(
-        models["mlp"]["test_y_5m"]["log_loss"] < models["logistic"]["test_y_5m"]["log_loss"]
-    )
-    report["mlp_beats_logistic_30m"] = bool(
-        models["mlp"]["test_y_30m"]["log_loss"] < models["logistic"]["test_y_30m"]["log_loss"]
-    )
-    report["near_majority_5m"] = near_majority(models, "test_y_5m")
-    report["near_majority_30m"] = near_majority(models, "test_y_30m")
-
-    # Extra lever if still ≈ majority: 1.0× ATR (wider, less class-0 mush), same split/X.
-    if report["near_majority_5m"] and report["near_majority_30m"]:
-        print("near majority on both heads — extra lever: 1.0× same-HTF ATR", flush=True)
-        wtr = ytr_t["label_valid_5m_wide"].to_numpy() & ytr_t["label_valid_30m_wide"].to_numpy()
-        wva = yva_t["label_valid_5m_wide"].to_numpy() & yva_t["label_valid_30m_wide"].to_numpy()
-        wte = yte_t["label_valid_5m_wide"].to_numpy() & yte_t["label_valid_30m_wide"].to_numpy()
-        _, wide_models = fit_suite(
-            Xtr_t.loc[wtr],
-            ytr_t.loc[wtr, "y_5m_wide"].to_numpy(),
-            ytr_t.loc[wtr, "y_30m_wide"].to_numpy(),
-            Xva_t.loc[wva],
-            yva_t.loc[wva, "y_5m_wide"].to_numpy(),
-            yva_t.loc[wva, "y_30m_wide"].to_numpy(),
-            Xte_t.loc[wte],
-            yte_t.loc[wte, "y_5m_wide"].to_numpy(),
-            yte_t.loc[wte, "y_30m_wide"].to_numpy(),
-            "y_5m_wide",
-            "y_30m_wide",
+    for h in HEADS:
+        report[f"mlp_beats_logistic_{h}"] = bool(
+            models["mlp"][f"test_{h}"]["log_loss"] < models["logistic"][f"test_{h}"]["log_loss"]
         )
-        report["extra_experiment"] = {
-            "lever": "STRUCTURE_WIDE_ATR_FRACTION=1.0 (same HTF ATR, still 3-class)",
-            "class_counts_train_5m_wide": ytr_t.loc[wtr, "y_5m_wide"].value_counts().sort_index().to_dict(),
-            "class_counts_train_30m_wide": ytr_t.loc[wtr, "y_30m_wide"].value_counts().sort_index().to_dict(),
-            "models": wide_models,
-            "near_majority_5m_wide": near_majority(wide_models, "test_y_5m_wide"),
-            "near_majority_30m_wide": near_majority(wide_models, "test_y_30m_wide"),
-        }
-    else:
-        report["extra_experiment"] = {
-            "skipped": True,
-            "reason": "primary 0.5× ATR heads beat majority by more than 0.01 logloss on at least one head",
-        }
+        maj = models["majority"][f"test_{h}"]["log_loss"]
+        best = min(models[k][f"test_{h}"]["log_loss"] for k in ("logistic", "lightgbm", "mlp"))
+        report[f"best_minus_majority_{h}"] = float(maj - best)
 
     lgb = fitted["lightgbm"]
     atr = yte_t["atr_5m"].to_numpy()
@@ -206,14 +131,12 @@ def main() -> None:
         "not_trending": np.abs(Xte_t["s714_label"].to_numpy()) != 1,
     }
     proba = lgb.predict_proba(Xte_t)
-    for horizon, ycol, pkey in (("5m", "y_5m", "y_5m"), ("30m", "y_30m", "y_30m")):
-        report["regimes"][horizon] = {}
+    for h in HEADS:
+        report["regimes"][h] = {}
         for rname, mask in masks.items():
             if mask.sum() < 50:
                 continue
-            report["regimes"][horizon][rname] = evaluate(
-                yte_t[ycol].to_numpy()[mask], proba[pkey][mask]
-            )
+            report["regimes"][h][rname] = evaluate(yte_t[h].to_numpy()[mask], proba[h][mask])
 
     print("explain", flush=True)
     shap15 = shap_tree(lgb.head_ltf, Xva_t, max_rows=args.shap_rows)
@@ -240,9 +163,9 @@ def main() -> None:
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
     print("wrote", args.out)
-    print("near_majority_5m", report["near_majority_5m"], "near_majority_30m", report["near_majority_30m"])
-    print("mlp_beats_logistic_5m", report["mlp_beats_logistic_5m"])
-    print("mlp_beats_logistic_30m", report["mlp_beats_logistic_30m"])
+    for h in HEADS:
+        print(h, "majority", models["majority"][f"test_{h}"]["log_loss"],
+              "best_gap", report[f"best_minus_majority_{h}"])
 
 
 if __name__ == "__main__":

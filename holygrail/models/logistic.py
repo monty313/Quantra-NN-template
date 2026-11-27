@@ -1,4 +1,4 @@
-"""Multinomial logistic regression (L2). Two separate heads via DualHead."""
+"""Multinomial logistic regression (L2). Independent heads via MultiHead."""
 
 from __future__ import annotations
 

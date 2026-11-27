@@ -1,4 +1,4 @@
-"""Structure-state labels: next closed 5m/30m, shared per F-bar, no leak."""
+"""Structure-state labels: next closed 5m/30m/1h, shared per F-bar, no leak."""
 
 from __future__ import annotations
 
@@ -69,6 +69,30 @@ def test_structure_uses_same_htf_atr_fraction():
         assert np.allclose(ths, ths[0])
 
 
+def test_structure_shared_within_1h_bar():
+    m1 = make_m1(2000, seed=11)
+    y, valid, _ = structure_direction(m1, "1h")
+    bar = m1.index.floor(TF_FREQ["1h"])
+    frame = pd.DataFrame({"y": y, "v": valid}, index=m1.index)
+    n_shared = 0
+    for _, g in frame.groupby(bar):
+        if not g["v"].any():
+            continue
+        vals = g.loc[g["v"], "y"].to_numpy()
+        assert np.unique(vals).size == 1
+        n_shared += 1
+    assert n_shared > 0
+
+
+def test_structure_1h_missing_next_bar_is_nan_not_zero():
+    m1 = make_m1(150, start="2024-03-04 00:00:00", seed=8)
+    drop = pd.date_range("2024-03-04 01:00:00", periods=60, freq="min")
+    m1 = m1.drop(index=drop)
+    y, valid, _ = structure_direction(m1, "1h")
+    assert not valid[0]
+    assert np.isnan(y[0])
+
+
 def test_structure_30m_invalid_when_next_30m_missing():
     m1 = make_m1(80, start="2024-03-04 00:00:00", seed=5)
     drop = pd.date_range("2024-03-04 00:30:00", periods=30, freq="min")
@@ -79,11 +103,13 @@ def test_structure_30m_invalid_when_next_30m_missing():
 
 
 def test_build_labels_keeps_old_heads_and_adds_structure():
-    m1 = make_m1(800, seed=9)
+    m1 = make_m1(2000, seed=9)
     ft = build_features(m1)
     lab = build_labels(m1, ft)
     assert lab.y_5m.shape == lab.y_15m.shape == (len(m1),)
     assert lab.label_valid_5m.any() and lab.label_valid_30m.any()
+    assert lab.y_1h_structure.shape == (len(m1),)
+    assert lab.label_valid_1h_structure.any()
     # old comparison heads still exist
     assert lab.label_valid_15m.any()
     last = len(m1) - 1

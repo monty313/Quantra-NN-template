@@ -52,36 +52,32 @@ class Policy(Protocol):
     def explain(self, X: pd.DataFrame | np.ndarray) -> dict: ...
 
 
-class DualHead:
-    """Two independent 3-class heads sharing one policy class, not one net.
+class MultiHead:
+    """Independent 3-class heads sharing one policy class, not one net.
 
-    Default names are the Stage-1 structure heads (next closed 5m / 30m).
-    The MLP policy may itself be two-headed; DualHead still wraps two copies
-    for logistic / LightGBM / majority.
+    Default keys: next-closed 5m / 30m / 1h structure.
     """
 
-    def __init__(self, make_policy, ltf_key: str = "y_5m", htf_key: str = "y_30m"):
-        self.ltf_key = ltf_key
-        self.htf_key = htf_key
-        self.head_ltf = make_policy()
-        self.head_htf = make_policy()
-        # Old names kept as aliases so explain scripts do not fork.
+    def __init__(self, make_policy, keys: tuple[str, ...] = ("y_5m", "y_30m", "y_1h_structure")):
+        self.keys = list(keys)
+        self.heads = {k: make_policy() for k in self.keys}
+        self.head_ltf = self.heads[self.keys[0]]
+        self.head_htf = self.heads[self.keys[1]] if len(self.keys) > 1 else self.head_ltf
+        self.head_1h = self.heads.get("y_1h_structure", self.head_htf)
         self.head_15m = self.head_ltf
-        self.head_1h = self.head_htf
 
-    def fit(self, X, y_ltf, y_htf, X_val=None, y_ltf_val=None, y_htf_val=None, sample_weight=None):
-        self.head_ltf.fit(X, y_ltf, sample_weight=sample_weight, X_val=X_val, y_val=y_ltf_val)
-        self.head_htf.fit(X, y_htf, sample_weight=sample_weight, X_val=X_val, y_val=y_htf_val)
+    def fit(self, X, ys: dict, X_val=None, ys_val=None, sample_weight=None):
+        for k, head in self.heads.items():
+            yv = None if ys_val is None else ys_val[k]
+            head.fit(X, ys[k], sample_weight=sample_weight, X_val=X_val, y_val=yv)
         return self
 
     def predict_proba(self, X) -> dict[str, np.ndarray]:
-        return {
-            self.ltf_key: self.head_ltf.predict_proba(X),
-            self.htf_key: self.head_htf.predict_proba(X),
-        }
+        return {k: h.predict_proba(X) for k, h in self.heads.items()}
 
     def explain(self, X) -> dict[str, dict]:
-        return {
-            self.ltf_key: self.head_ltf.explain(X),
-            self.htf_key: self.head_htf.explain(X),
-        }
+        return {k: h.explain(X) for k, h in self.heads.items()}
+
+
+# Back-compat name used in earlier Stage-1 notes.
+DualHead = MultiHead
