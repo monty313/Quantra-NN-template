@@ -5,7 +5,7 @@ Mark: read this next to the repo. Short reasons, not a second spec.
 ## Three layers, on purpose
 
 1. `holygrail/` builds X and validity from 1m candles. Same function for history and live.
-2. `holygrail/labels.py` builds answers in a **separate** table. Targets never enter X or the scaler. Training heads are next-closed **5m**, **30m**, and **1h** structure (`y_1h_structure`). Old y_15m / y_1h stay as unused comparison columns.
+2. `holygrail/labels.py` builds answers in a **separate** table. Targets never enter X or the scaler. Training heads are next-closed **5m**, **30m**, and **1h** **direction** (`y_1h_structure`): sign of typical-price change, no ATR fence. Old y_15m / y_1h stay as unused comparison columns.
 3. `holygrail/policy.py` is `fit` / `predict_proba` / `explain`. LightGBM, logistic, MLP, or a later RL head can swap without touching features.
 
 Quantra's Keras file is not the network. It is a course template with accuracy + sigmoid. We did not lock to it.
@@ -41,20 +41,19 @@ IQR of 0 → scale 1, no clipping.
 
 ## Labels
 
-X is set 2: live 1m + developing 5m/30m/1h **structure**. A 15-minute 1m-tick vs 0.5×5m ATR asks “did the next 15 ones-and-zeros of price clear a 5m ATR band?” That is not the question the 128 columns describe, which is why those heads sat on the majority.
+X is set 2: live 1m + developing 5m/30m/1h **structure**. A 15-minute 1m-tick vs 0.5×5m ATR asks “did the next 15 ones-and-zeros of price clear a 5m ATR band?” That is not the question the 128 columns describe. Grading the *next closed F-bar* with a 0.5× ATR fence was also the wrong target: it manufactured a ~70% class-0 majority, so argmax collapsed to 0 even when logloss moved.
 
-**Training heads:** next **closed** 5m, 30m, and 1h structure direction (`y_5m`, `y_30m`, `y_1h_structure`).
+**Training heads:** next **closed** 5m, 30m, and 1h **direction** (`y_5m`, `y_30m`, `y_1h_structure`).
 
 - `now` = typical price of **this** F-bar when it has closed (B_t). Shared for every 1m inside that bar. Labels may use that close; early-row X does not.
 - `future` = typical price of the **next** F-bar (B_{t+1}). X never contains B_{t+1}. We do not skip B_t (that compared B_{t-1} to B_{t+1} and put class 0 back in the majority).
-- threshold = **0.5 × ATR14 of that same F-bar series**, at B_t. Spec already names 0.5× ATR. 5m-ahead uses 5m ATR; 30m-ahead uses 30m ATR; 1h-ahead uses 1h ATR.
+- **y = sign(future − now) ∈ {−1, +1}.** No ATR size fence. Std / ATR / RSI stay in X only.
+- Exact-zero typical (future == now) → invalid, **drop**, never class 0.
 - Missing this/next F-bar (weekend, tail) → NaN, not 0. Same rule as T27.
 
 Old y_15m / y_1h are still computed and written, but they are not fit.
 
 Train on the last 1m of each 5m bar (one live snapshot per 5m, most developed X, still leak-free for B_{t+1}). 1h labels then repeat ~12× per hour — same sharing pattern as 30m repeating ~6×.
-
-If all three heads still ≈ majority, one extra lever: **1.0×** the same HTF ATR (wider, less class-0 mush). Not a second architecture. Stop after that. They are not ≈ majority (5m Δ −0.076, 30m Δ −0.033, 1h Δ −0.031), so the lever was not run.
 
 ## Split
 
@@ -71,9 +70,9 @@ Consecutive 1m rows of the same 5m bar share one y_5m (30m rows share y_30m; 1h 
 ## Models
 
 - Majority: constant train class frequencies (fair logloss baseline).
-- Logistic: L2 multinomial, no rebalance.
-- LightGBM: shallow, early stop on time-ordered val.
-- MLP: 128→64→32→3, dropout, weight decay, **not** Quantra's 5-layer sigmoid tower.
+- Logistic: L2 **binary**, no rebalance.
+- LightGBM: shallow binary, early stop on time-ordered val.
+- MLP: 128→64→32→2, dropout, weight decay, **not** Quantra's 5-layer sigmoid tower.
 
 If MLP loses to logistic on the untouched test set, that is the result. Do not keep training until the NN "wins." `v6_learn` LESSONS_BOOK called that "stamping the day": the score moves, the skill does not.
 

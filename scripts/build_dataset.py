@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build X (128), structure y_5m / y_30m / y_1h_structure, scaler.
+"""Build X (128), direction y_5m / y_30m / y_1h_structure, scaler.
 
 X is unchanged (128 cols, order, scaler rules, leak-safe timing).
 y_15m / y_1h are written as unused comparison columns.
@@ -77,15 +77,11 @@ def main() -> None:
                 "y_5m": lab.y_5m[idx],
                 "y_30m": lab.y_30m[idx],
                 "y_1h_structure": lab.y_1h_structure[idx],
-                "y_5m_wide": lab.y_5m_wide[idx],
-                "y_30m_wide": lab.y_30m_wide[idx],
                 "y_15m": lab.y_15m[idx],
                 "y_1h": lab.y_1h[idx],
                 "atr_5m": ft.atr_5m[idx],
                 "last_1m_of_5m": last5[idx],
                 "label_valid_1h_structure": lab.label_valid_1h_structure[idx],
-                "label_valid_5m_wide": lab.label_valid_5m_wide[idx],
-                "label_valid_30m_wide": lab.label_valid_30m_wide[idx],
             }
         )
 
@@ -99,6 +95,8 @@ def main() -> None:
         "n_val": int(len(val_idx)),
         "n_test": int(len(test_idx)),
         "primary_heads": ["y_5m", "y_30m", "y_1h_structure"],
+        "label_kind": "sign_tp_next_minus_this",
+        "n_classes": 2,
         "comparison_heads": ["y_15m", "y_1h"],
         "purge_minutes": STRUCTURE_PURGE_MINUTES,
         "class_counts": {

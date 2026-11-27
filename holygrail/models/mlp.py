@@ -1,7 +1,7 @@
 """Shallow regularized MLP. Not Quantra's Keras net.
 
 Quantra's course net is a 5-block Dense+sigmoid tower trained with accuracy
-on daily BAC. We use a small 128→64→32→3 net, ReLU, dropout, weight decay,
+on daily BAC. We use a small 128→64→32→2 net, ReLU, dropout, weight decay,
 cross-entropy, early stopping on time-ordered val logloss.
 
 If this loses to logistic on the frozen test set, report that. Do not add
@@ -16,6 +16,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
+from holygrail.config import N_CLASSES
 from holygrail.policy import encode_y
 
 
@@ -29,7 +30,7 @@ class _Net(nn.Module):
             layers.append(nn.ReLU())
             layers.append(nn.Dropout(dropout))
             prev = h
-        layers.append(nn.Linear(prev, 3))
+        layers.append(nn.Linear(prev, N_CLASSES))
         self.net = nn.Sequential(*layers)
 
     def forward(self, x):

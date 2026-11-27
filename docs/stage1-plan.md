@@ -1,10 +1,10 @@
 # Stage 1 market-state model — plan
 
-Status: done on `cursor/stage1-market-state-a365`. T1–T44 + structure-label tests green (45). Training heads are next-closed **5m / 30m / 1h** structure (`y_15m`/`y_1h` unused comparison). EURUSD train/eval in `artifacts/train_results.json` and `docs/stage1-results.md`.
+Status: done on `cursor/stage1-market-state-a365`. T1–T44 + structure-label tests green (46). Training heads are 2-class next-closed **5m / 30m / 1h** direction (`y_15m`/`y_1h` unused comparison). EURUSD train/eval in `artifacts/train_results.json` and `docs/stage1-results.md`.
 
 ## Goal
 
-Learn market structure from a 128-column observation matrix `X` plus three 3-class **structure** targets (`y_5m`, `y_30m`, `y_1h_structure`: next closed HTF direction). Old `y_15m` / `y_1h` tick heads are unused comparison columns. Outputs are calibrated state probabilities, not trades.
+Learn market structure from a 128-column observation matrix `X` plus three 2-class **direction** targets (`y_5m`, `y_30m`, `y_1h_structure`: sign of next closed HTF typical-price change). Old `y_15m` / `y_1h` tick heads are unused comparison columns. Outputs are calibrated state probabilities, not trades.
 
 ## Layers
 
@@ -33,7 +33,7 @@ Entries, exits, sizing, PnL, Stage 2.
 
 ## Lessons from prior repos
 
-Studied the monty313 owner list below (skipped med-reminder). Goal: steal the good habits, not the patterns that made earlier bots look good and then fail. Stage 1 is HolyGrail 128-col observation + calibrated 3-class probabilities. It is not Camillion 114, not regimes StdDev 20/30, not PPO, not FTMO PnL.
+Studied the monty313 owner list below (skipped med-reminder). Goal: steal the good habits, not the patterns that made earlier bots look good and then fail. Stage 1 is HolyGrail 128-col observation + calibrated 2-class direction probabilities. It is not Camillion 114, not regimes StdDev 20/30, not PPO, not FTMO PnL.
 
 ### Keep
 

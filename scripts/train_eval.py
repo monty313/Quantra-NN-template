@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train majority / logistic / LightGBM / MLP on y_5m, y_30m, y_1h_structure."""
+"""Train 2-class majority / logistic / LightGBM / MLP on y_5m, y_30m, y_1h_structure."""
 
 from __future__ import annotations
 
@@ -90,12 +90,14 @@ def main() -> None:
 
     report = {
         "primary_heads": list(HEADS),
+        "n_classes": 2,
+        "label_kind": "sign_tp_next_minus_this",
         "overlap": {
             "n_train_1m": len(Xtr),
             "n_train_last_1m_of_5m": len(Xtr_t),
             "n_val_last_1m_of_5m": len(Xva_t),
             "n_test_last_1m_of_5m": len(Xte_t),
-            "note": "Structure labels shared per F-bar. Train on last 1m of each 5m.",
+            "note": "Direction labels (sign TP next−this) shared per F-bar. Train on last 1m of each 5m.",
         },
         "class_counts": {
             f"{split}_{head}": frame[head].value_counts().sort_index().to_dict()

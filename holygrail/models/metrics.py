@@ -1,10 +1,10 @@
-"""Test metrics: log loss, ECE, per-class P/R, macro F1. No PnL."""
+"""Test metrics: log loss, accuracy vs 50%, ECE, per-class P/R. No PnL."""
 
 from __future__ import annotations
 
 import numpy as np
 from sklearn.metrics import (
-    f1_score,
+    accuracy_score,
     log_loss,
     precision_recall_fscore_support,
 )
@@ -13,7 +13,7 @@ from holygrail.policy import CLASS_ORDER, encode_y
 
 
 def expected_calibration_error(y_true: np.ndarray, proba: np.ndarray, n_bins: int = 10) -> float:
-    """Multiclass ECE: confidence vs accuracy, equal-width bins on max-prob."""
+    """Binary/multiclass ECE: confidence vs accuracy, equal-width bins on max-prob."""
     yn = encode_y(np.asarray(y_true))
     conf = proba.max(axis=1)
     pred = proba.argmax(axis=1)
@@ -36,15 +36,17 @@ def expected_calibration_error(y_true: np.ndarray, proba: np.ndarray, n_bins: in
 
 def evaluate(y_true: np.ndarray, proba: np.ndarray) -> dict:
     yn = encode_y(np.asarray(y_true))
-    labels = [0, 1, 2]
+    n_cls = proba.shape[1]
+    labels = list(range(n_cls))
     ll = float(log_loss(yn, proba, labels=labels))
     pred = proba.argmax(axis=1)
+    acc = float(accuracy_score(yn, pred))
     p, r, f, s = precision_recall_fscore_support(
         yn, pred, labels=labels, zero_division=0
     )
-    macro_f1 = float(f1_score(yn, pred, labels=labels, average="macro", zero_division=0))
+    names = ["-1", "+1"] if n_cls == 2 else ["-1", "0", "+1"]
     per_class = {}
-    for i, name in enumerate(["-1", "0", "+1"]):
+    for i, name in enumerate(names):
         per_class[name] = {
             "precision": float(p[i]),
             "recall": float(r[i]),
@@ -53,8 +55,9 @@ def evaluate(y_true: np.ndarray, proba: np.ndarray) -> dict:
         }
     return {
         "log_loss": ll,
+        "accuracy": acc,
+        "accuracy_minus_50": acc - 0.5,
         "ece": expected_calibration_error(y_true, proba),
-        "macro_f1": macro_f1,
         "per_class": per_class,
         "class_order": CLASS_ORDER.tolist(),
     }

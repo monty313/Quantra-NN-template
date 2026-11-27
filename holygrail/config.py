@@ -46,12 +46,12 @@ SMA50_SHIFT = 0
 # Old 1m-tick heads (kept as unused comparison columns): 15m / 1h vs 0.5× 5m ATR.
 LABEL_HORIZONS_MIN = (15, 60)
 LABEL_ATR_FRACTION = 0.5
-# Stage-1 training heads: next closed HTF structure, not a 15m tick.
-# Spec names 0.5× ATR; same-HTF ATR as the horizon.
+# Stage-1 training heads: sign of next-closed HTF typical-price change.
+# No ATR size fence. Exact-zero move is invalid (dropped), not class 0.
 STRUCTURE_HEADS = ("5m", "30m", "1h")
 STRUCTURE_BAR_MINUTES = {"5m": 5, "30m": 30, "1h": 60}
-STRUCTURE_ATR_FRACTION = 0.5
-STRUCTURE_WIDE_ATR_FRACTION = 1.0  # extra lever only; not the default
+N_CLASSES = 2
+CLASS_LABELS = (-1, 1)
 # 1h structure: current 1h remainder + next 1h ≤ 120m. Tightest of the three heads.
 STRUCTURE_PURGE_MINUTES = 120
 

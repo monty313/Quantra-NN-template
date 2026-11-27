@@ -2,7 +2,7 @@
 
 The Quantra notebooks under `Neural-Networks-in-Trading_new/` are a starting template only (course code, accuracy metric, daily BAC). Stage 1 is a new, pluggable market-state pipeline: **features → labels → policy**. Why each choice was made: comments in `holygrail/` plus `docs/stage1-plan.md`, `docs/stage1-why-notes.md`, `docs/stage1-results.md`.
 
-Outputs are calibrated 3-class probabilities (`-1 / 0 / +1`) for the **next closed 5m, 30m, and 1h structure**. Not 15-minute ticks, not trade signals. No entries, exits, sizing, or PnL.
+Outputs are calibrated 2-class probabilities (`-1 / +1`) for the **next closed 5m, 30m, and 1h direction**. Not ATR size fences, not 15-minute ticks, not trade signals. No entries, exits, sizing, or PnL.
 
 ## Layout
 
@@ -19,7 +19,7 @@ Policy contract (swap LightGBM / MLP / later RL without touching features):
 
 ```python
 policy.fit(X, {"y_5m": ..., "y_30m": ..., "y_1h_structure": ...})
-policy.predict_proba(X)  # dict of (n, 3) columns [-1, 0, +1]
+policy.predict_proba(X)  # dict of (n, 2) columns [-1, +1]
 policy.explain(X)
 ```
 

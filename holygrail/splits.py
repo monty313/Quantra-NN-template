@@ -7,7 +7,7 @@ the first test row is 1 minute after the last train row and is not independent.
 
 Why not class_weight='balanced' (adaptive-risk): the spec says report class
 counts and do not rebalance. Balancing makes logloss/calibration incomparable
-to the real occupancy of +1/0/-1.
+to the real occupancy of the labels.
 
 Shuffle is forbidden. Val is a walk-forward tail inside train, same rules.
 """

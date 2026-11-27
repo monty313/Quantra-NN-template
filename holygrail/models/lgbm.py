@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 from lightgbm import LGBMClassifier, early_stopping, log_evaluation
 
+from holygrail.config import N_CLASSES
 from holygrail.policy import encode_y
 
 
@@ -31,8 +32,7 @@ class LightGBMPolicy:
             min_child_samples=min_child_samples,
             reg_lambda=reg_lambda,
             num_leaves=num_leaves,
-            objective="multiclass",
-            num_class=3,
+            objective="binary",
             verbosity=-1,
             n_jobs=-1,
         )
@@ -52,7 +52,7 @@ class LightGBMPolicy:
             callbacks.append(early_stopping(30, verbose=False))
             fit_kw["eval_X"] = Xv
             fit_kw["eval_y"] = yv
-            fit_kw["eval_metric"] = "multi_logloss"
+            fit_kw["eval_metric"] = "binary_logloss"
         fit_kw["callbacks"] = callbacks
         self.model.fit(Xn, yn, **fit_kw)
         return self
@@ -60,7 +60,7 @@ class LightGBMPolicy:
     def predict_proba(self, X) -> np.ndarray:
         Xn = np.asarray(X, dtype=np.float32)
         proba = self.model.predict_proba(Xn)
-        full = np.zeros((len(Xn), 3), dtype=np.float64)
+        full = np.zeros((len(Xn), N_CLASSES), dtype=np.float64)
         for j, cls in enumerate(self.model.classes_):
             full[:, int(cls)] = proba[:, j]
         return full

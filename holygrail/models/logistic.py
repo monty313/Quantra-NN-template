@@ -1,10 +1,11 @@
-"""Multinomial logistic regression (L2). Independent heads via MultiHead."""
+"""Binary logistic regression (L2). Independent heads via MultiHead."""
 
 from __future__ import annotations
 
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 
+from holygrail.config import N_CLASSES
 from holygrail.policy import encode_y
 
 
@@ -30,8 +31,8 @@ class LogisticPolicy:
     def predict_proba(self, X) -> np.ndarray:
         Xn = np.asarray(X, dtype=np.float64)
         proba = self.model.predict_proba(Xn)
-        # Ensure columns are classes 0,1,2 even if a class is missing
-        full = np.zeros((len(Xn), 3), dtype=np.float64)
+        # Ensure columns are classes 0..N_CLASSES-1 even if a class is missing
+        full = np.zeros((len(Xn), N_CLASSES), dtype=np.float64)
         for j, cls in enumerate(self.model.classes_):
             full[:, int(cls)] = proba[:, j]
         return full
