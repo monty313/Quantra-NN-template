@@ -8,7 +8,7 @@ import pandas as pd
 from holygrail.columns import FEATURE_COLUMNS
 from holygrail.config import TF_FREQ
 from holygrail.features import build_features
-from holygrail.labels import build_labels, close2_vs_close, close2_vs_typ
+from holygrail.labels import build_labels, close2_vs_close, close2_vs_typ, nextclose_vs_close
 from holygrail.timing import last_row_of_bar, resample_ohlc
 from tests.conftest import make_m1
 
@@ -179,3 +179,18 @@ def test_mutate_t2_close_flips_B_not_X():
     assert v1[i] and v2[i]
     assert y1[i] == 1.0
     assert y2[i] == 0.0
+
+
+def test_nextclose_vs_close_definition_and_not_in_x():
+    m1 = make_m1(800, seed=21)
+    y, valid = nextclose_vs_close(m1)
+    last = last_row_of_bar(m1.index, "5min")
+    c5 = resample_ohlc(m1, TF_FREQ["5m"])
+    i = int(np.flatnonzero(last & valid)[12])
+    this_bar = m1.index[i].floor("5min")
+    nxt = this_bar + pd.Timedelta(minutes=5)
+    expect = 1.0 if float(c5.loc[nxt, "close"]) > float(c5.loc[this_bar, "close"]) else 0.0
+    assert y[i] == expect
+    ft = build_features(m1)
+    assert "y_5m_nextclose_vs_close" not in ft.X.columns
+    assert "y_5m_nextclose_vs_close" not in FEATURE_COLUMNS

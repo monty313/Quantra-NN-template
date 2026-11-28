@@ -350,6 +350,7 @@ def test_T24_no_answers_in_X(m1_short):
     assert "y_1h_structure" not in ft.X.columns
     assert "y_5m_dir" not in ft.X.columns
     assert "y_5m_nextclose_vs_typ" not in ft.X.columns
+    assert "y_5m_nextclose_vs_close" not in ft.X.columns
     assert "y_5m_close2_vs_typ" not in ft.X.columns
     assert "y_5m_close2_vs_close" not in ft.X.columns
 
