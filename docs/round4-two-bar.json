@@ -1,0 +1,620 @@
+{
+  "fold": "fold_60_20",
+  "seed": 0,
+  "purge_minutes": 10,
+  "embargo_minutes": 10,
+  "n_parquet": 328983,
+  "n_sealed": 65797,
+  "n_missing_t2": 360,
+  "sealed_scored": false,
+  "new_columns": false,
+  "A": {
+    "label": "y_5m_close2_vs_typ",
+    "n_train": 196421,
+    "n_val": 65471,
+    "ties_train": 733,
+    "ties_val": 269,
+    "missing_t2_train": 232,
+    "missing_t2_val": 57,
+    "logistic_180": {
+      "n": 65471,
+      "accuracy": 0.5826854637931298,
+      "log_loss": 0.6741744383040374,
+      "ece": 0.009109352460418906
+    },
+    "logistic_128": {
+      "n": 65471,
+      "accuracy": 0.5823799850315406,
+      "log_loss": 0.6744335453422297,
+      "ece": 0.009615333419319931
+    },
+    "baselines": {
+      "rule_close_gt_typical": {
+        "n": 65471,
+        "acc": 0.5841212139725985,
+        "n_dropped": 0
+      },
+      "majority": {
+        "n": 65471,
+        "acc": 0.5080417283988331,
+        "n_dropped": 0,
+        "train_majority": 1.0
+      },
+      "prev5m_dir": {
+        "n": 64993,
+        "acc": 0.5508747095841091,
+        "n_dropped": 0,
+        "zeros_dropped": 478
+      },
+      "persist_close_t_vs_tminus1": null
+    },
+    "model_minus_rule_pp": -0.1435750179468731,
+    "disagreement": {
+      "n_agree": 60011,
+      "acc_agree": 0.5909916515305528,
+      "n_disagree": 5460,
+      "acc_disagree": 0.49139194139194137,
+      "agree_rate": 0.9166042980861756
+    },
+    "residual_y_ne_rule": {
+      "n": 27228,
+      "acc": 0.09853826942852946,
+      "vs_50": -0.40146173057147055
+    },
+    "calibration_10bin": {
+      "n_bins": 10,
+      "n": 65471,
+      "bins": [
+        {
+          "bin": 1,
+          "n": 6547,
+          "mean_pred": 0.34693238070900595,
+          "actual_rate": 0.343974339392088,
+          "p_lo": 0.06287485923294403,
+          "p_hi": 0.3851927207880901
+        },
+        {
+          "bin": 2,
+          "n": 6547,
+          "mean_pred": 0.40429013790495044,
+          "actual_rate": 0.40079425691156256,
+          "p_lo": 0.38519668109386507,
+          "p_hi": 0.4209759693512441
+        },
+        {
+          "bin": 3,
+          "n": 6547,
+          "mean_pred": 0.4358573636941111,
+          "actual_rate": 0.4296624408125859,
+          "p_lo": 0.4209810543698614,
+          "p_hi": 0.4499727356749187
+        },
+        {
+          "bin": 4,
+          "n": 6547,
+          "mean_pred": 0.4633393029872834,
+          "actual_rate": 0.4692225446769513,
+          "p_lo": 0.44997557146580647,
+          "p_hi": 0.4767676576942921
+        },
+        {
+          "bin": 5,
+          "n": 6547,
+          "mean_pred": 0.4894340764709386,
+          "actual_rate": 0.48205284863296166,
+          "p_lo": 0.47677868705330234,
+          "p_hi": 0.5022269078225419
+        },
+        {
+          "bin": 6,
+          "n": 6547,
+          "mean_pred": 0.5150201169755259,
+          "actual_rate": 0.5217656942110891,
+          "p_lo": 0.5022338943140531,
+          "p_hi": 0.5277162959148981
+        },
+        {
+          "bin": 7,
+          "n": 6547,
+          "mean_pred": 0.5408241120585735,
+          "actual_rate": 0.5666717580571254,
+          "p_lo": 0.5277190324061418,
+          "p_hi": 0.5541723492318292
+        },
+        {
+          "bin": 8,
+          "n": 6547,
+          "mean_pred": 0.5683732355054052,
+          "actual_rate": 0.5814877042920421,
+          "p_lo": 0.5541735797360233,
+          "p_hi": 0.5831911524558093
+        },
+        {
+          "bin": 9,
+          "n": 6547,
+          "mean_pred": 0.6006053852744837,
+          "actual_rate": 0.6155491064609745,
+          "p_lo": 0.5831923745798164,
+          "p_hi": 0.6205220421872638
+        },
+        {
+          "bin": 10,
+          "n": 6548,
+          "mean_pred": 0.6603832853013855,
+          "actual_rate": 0.6692119731215639,
+          "p_lo": 0.620525585705906,
+          "p_hi": 0.9264511997167743
+        }
+      ]
+    },
+    "acc_by_hour": [
+      {
+        "key": 0,
+        "n": 1975,
+        "acc": 0.5650632911392405
+      },
+      {
+        "key": 1,
+        "n": 2339,
+        "acc": 0.5899957246686618
+      },
+      {
+        "key": 2,
+        "n": 2486,
+        "acc": 0.5752212389380531
+      },
+      {
+        "key": 3,
+        "n": 2592,
+        "acc": 0.5613425925925926
+      },
+      {
+        "key": 4,
+        "n": 2572,
+        "acc": 0.5707620528771384
+      },
+      {
+        "key": 5,
+        "n": 2559,
+        "acc": 0.5928096912856584
+      },
+      {
+        "key": 6,
+        "n": 2543,
+        "acc": 0.5981124655918206
+      },
+      {
+        "key": 7,
+        "n": 2507,
+        "acc": 0.5739928201037097
+      },
+      {
+        "key": 8,
+        "n": 2567,
+        "acc": 0.584729255940787
+      },
+      {
+        "key": 9,
+        "n": 2599,
+        "acc": 0.5679107348980377
+      },
+      {
+        "key": 10,
+        "n": 2614,
+        "acc": 0.58530986993114
+      },
+      {
+        "key": 11,
+        "n": 2592,
+        "acc": 0.5844907407407407
+      },
+      {
+        "key": 12,
+        "n": 2580,
+        "acc": 0.5755813953488372
+      },
+      {
+        "key": 13,
+        "n": 2572,
+        "acc": 0.5769828926905132
+      },
+      {
+        "key": 14,
+        "n": 2575,
+        "acc": 0.5770873786407767
+      },
+      {
+        "key": 15,
+        "n": 2566,
+        "acc": 0.5779423226812159
+      },
+      {
+        "key": 16,
+        "n": 2843,
+        "acc": 0.5793176222300387
+      },
+      {
+        "key": 17,
+        "n": 3279,
+        "acc": 0.595608417200366
+      },
+      {
+        "key": 18,
+        "n": 3267,
+        "acc": 0.5898377716559535
+      },
+      {
+        "key": 19,
+        "n": 3226,
+        "acc": 0.588034717916925
+      },
+      {
+        "key": 20,
+        "n": 3245,
+        "acc": 0.600924499229584
+      },
+      {
+        "key": 21,
+        "n": 3256,
+        "acc": 0.5992014742014742
+      },
+      {
+        "key": 22,
+        "n": 3223,
+        "acc": 0.5811355879615265
+      },
+      {
+        "key": 23,
+        "n": 2894,
+        "acc": 0.5753282653766413
+      }
+    ],
+    "acc_by_weekday": [
+      {
+        "key": 0,
+        "n": 4826,
+        "acc": 0.5903439701616245
+      },
+      {
+        "key": 1,
+        "n": 15081,
+        "acc": 0.5855712485909422
+      },
+      {
+        "key": 2,
+        "n": 14943,
+        "acc": 0.5804724620223516
+      },
+      {
+        "key": 3,
+        "n": 15279,
+        "acc": 0.5802735781137509
+      },
+      {
+        "key": 4,
+        "n": 15342,
+        "acc": 0.5819971320557945
+      }
+    ],
+    "placebo_shuffled_label": {
+      "n": 65471,
+      "acc": 0.49736524568129403,
+      "n_dropped": 0
+    },
+    "placebo_shuffled_time": {
+      "n": 65471,
+      "acc": 0.5014892089627468,
+      "n_dropped": 0
+    }
+  },
+  "B": {
+    "label": "y_5m_close2_vs_close",
+    "n_train": 193689,
+    "n_val": 64311,
+    "ties_train": 3465,
+    "ties_val": 1429,
+    "missing_t2_train": 232,
+    "missing_t2_val": 57,
+    "logistic_180": {
+      "n": 64311,
+      "accuracy": 0.5111722722395857,
+      "log_loss": 0.693383947666498,
+      "ece": 0.012382524271999316
+    },
+    "logistic_128": {
+      "n": 64311,
+      "accuracy": 0.5101149103574816,
+      "log_loss": 0.6933231714924168,
+      "ece": 0.011766124463227322
+    },
+    "baselines": {
+      "rule_close_gt_typical": {
+        "n": 64311,
+        "acc": 0.49655579916344017,
+        "n_dropped": 0
+      },
+      "majority": {
+        "n": 64311,
+        "acc": 0.5070205719083827,
+        "n_dropped": 0,
+        "train_majority": 1.0
+      },
+      "prev5m_dir": {
+        "n": 63846,
+        "acc": 0.498183128152116,
+        "n_dropped": 0,
+        "zeros_dropped": 465
+      },
+      "persist_close_t_vs_tminus1": {
+        "n": 62283,
+        "acc": 0.4969092689819052,
+        "n_dropped": 0
+      }
+    },
+    "model_minus_rule_pp": 1.4616473076145553,
+    "disagreement": {
+      "n_agree": 19515,
+      "acc_agree": 0.5127337945170382,
+      "n_disagree": 44796,
+      "acc_disagree": 0.5104920082150192,
+      "agree_rate": 0.30344731072444836
+    },
+    "residual_y_ne_rule": {
+      "n": 32377,
+      "acc": 0.7063038576767459,
+      "vs_50": 0.20630385767674586
+    },
+    "calibration_10bin": {
+      "n_bins": 10,
+      "n": 64311,
+      "bins": [
+        {
+          "bin": 1,
+          "n": 6431,
+          "mean_pred": 0.45070785736134866,
+          "actual_rate": 0.4837505831130462,
+          "p_lo": 0.3856154851820581,
+          "p_hi": 0.4629472175253593
+        },
+        {
+          "bin": 2,
+          "n": 6431,
+          "mean_pred": 0.46920311928590624,
+          "actual_rate": 0.49805628984605815,
+          "p_lo": 0.46294936110577667,
+          "p_hi": 0.4747314206844132
+        },
+        {
+          "bin": 3,
+          "n": 6431,
+          "mean_pred": 0.4794447623758226,
+          "actual_rate": 0.48825999067019127,
+          "p_lo": 0.47473271691600755,
+          "p_hi": 0.48389227407898516
+        },
+        {
+          "bin": 4,
+          "n": 6431,
+          "mean_pred": 0.48806555064258583,
+          "actual_rate": 0.5103405380189706,
+          "p_lo": 0.4838942126008607,
+          "p_hi": 0.49198923166999503
+        },
+        {
+          "bin": 5,
+          "n": 6431,
+          "mean_pred": 0.4958347830043958,
+          "actual_rate": 0.4985227802830042,
+          "p_lo": 0.49198979924839464,
+          "p_hi": 0.4996876029854589
+        },
+        {
+          "bin": 6,
+          "n": 6431,
+          "mean_pred": 0.5035671820730809,
+          "actual_rate": 0.5179598818224226,
+          "p_lo": 0.4996881981567253,
+          "p_hi": 0.5073907447088586
+        },
+        {
+          "bin": 7,
+          "n": 6431,
+          "mean_pred": 0.5113445060061433,
+          "actual_rate": 0.5153164360130618,
+          "p_lo": 0.5073907709269767,
+          "p_hi": 0.515523928244442
+        },
+        {
+          "bin": 8,
+          "n": 6431,
+          "mean_pred": 0.5201176911310899,
+          "actual_rate": 0.5160939200746385,
+          "p_lo": 0.5155265293892518,
+          "p_hi": 0.525043712466246
+        },
+        {
+          "bin": 9,
+          "n": 6431,
+          "mean_pred": 0.5311771612518718,
+          "actual_rate": 0.5123619965790701,
+          "p_lo": 0.525045547517299,
+          "p_hi": 0.5383945414391602
+        },
+        {
+          "bin": 10,
+          "n": 6432,
+          "mean_pred": 0.552579182214939,
+          "actual_rate": 0.5295398009950248,
+          "p_lo": 0.5383960162255906,
+          "p_hi": 0.6793043453170584
+        }
+      ]
+    },
+    "acc_by_hour": [
+      {
+        "key": 0,
+        "n": 1888,
+        "acc": 0.5805084745762712
+      },
+      {
+        "key": 1,
+        "n": 2249,
+        "acc": 0.5042240995998222
+      },
+      {
+        "key": 2,
+        "n": 2413,
+        "acc": 0.5105677579776212
+      },
+      {
+        "key": 3,
+        "n": 2550,
+        "acc": 0.5164705882352941
+      },
+      {
+        "key": 4,
+        "n": 2517,
+        "acc": 0.5025824394119984
+      },
+      {
+        "key": 5,
+        "n": 2502,
+        "acc": 0.5171862509992007
+      },
+      {
+        "key": 6,
+        "n": 2471,
+        "acc": 0.50951031970862
+      },
+      {
+        "key": 7,
+        "n": 2419,
+        "acc": 0.5200496072757338
+      },
+      {
+        "key": 8,
+        "n": 2517,
+        "acc": 0.4970202622169249
+      },
+      {
+        "key": 9,
+        "n": 2572,
+        "acc": 0.526438569206843
+      },
+      {
+        "key": 10,
+        "n": 2592,
+        "acc": 0.5030864197530864
+      },
+      {
+        "key": 11,
+        "n": 2562,
+        "acc": 0.5058548009367682
+      },
+      {
+        "key": 12,
+        "n": 2546,
+        "acc": 0.5074626865671642
+      },
+      {
+        "key": 13,
+        "n": 2548,
+        "acc": 0.5062794348508635
+      },
+      {
+        "key": 14,
+        "n": 2556,
+        "acc": 0.513302034428795
+      },
+      {
+        "key": 15,
+        "n": 2545,
+        "acc": 0.5245579567779961
+      },
+      {
+        "key": 16,
+        "n": 2814,
+        "acc": 0.5309168443496801
+      },
+      {
+        "key": 17,
+        "n": 3259,
+        "acc": 0.49125498619208346
+      },
+      {
+        "key": 18,
+        "n": 3223,
+        "acc": 0.4964318957493019
+      },
+      {
+        "key": 19,
+        "n": 3195,
+        "acc": 0.513302034428795
+      },
+      {
+        "key": 20,
+        "n": 3197,
+        "acc": 0.510165780419143
+      },
+      {
+        "key": 21,
+        "n": 3207,
+        "acc": 0.4926722793888369
+      },
+      {
+        "key": 22,
+        "n": 3150,
+        "acc": 0.5053968253968254
+      },
+      {
+        "key": 23,
+        "n": 2819,
+        "acc": 0.5133025895707698
+      }
+    ],
+    "acc_by_weekday": [
+      {
+        "key": 0,
+        "n": 4746,
+        "acc": 0.5147492625368731
+      },
+      {
+        "key": 1,
+        "n": 14815,
+        "acc": 0.5132635842051975
+      },
+      {
+        "key": 2,
+        "n": 14694,
+        "acc": 0.5102082482645978
+      },
+      {
+        "key": 3,
+        "n": 15002,
+        "acc": 0.508865484602053
+      },
+      {
+        "key": 4,
+        "n": 15054,
+        "acc": 0.5112262521588946
+      }
+    ],
+    "placebo_shuffled_label": {
+      "n": 64311,
+      "acc": 0.5009096422073984,
+      "n_dropped": 0
+    },
+    "placebo_shuffled_time": {
+      "n": 64311,
+      "acc": 0.4985150285332214,
+      "n_dropped": 0
+    }
+  },
+  "intuition_before": "**Before the numbers.** Two-bar y is the honest next question after Round 3: if 1-bar\nnext-close-vs-typical is just this close vs this typical (rule 61.90%, model \u22120.15 pp),\nthen looking at bar t+2 either (1) the known offset still leaks into y because FX 5m\ncloses stay near this close, so A is a weaker copy of R (~55\u201358%), or (2) two bars is\nenough that R dies and we finally measure leftover skill. CEO G1 said leftover 5m\ndirection on this X is a coin; A-residual vs 50% is that test on a longer horizon.\nB is two-bar close-to-close. One-bar close-to-close was already ~50.9%. Belief: B is\nstill a coin, R is the wrong baseline for B, and close-to-close persistence\n(sign(close_t \u2212 close_{t\u22121})) is the fair sibling \u2014 also near 50%. The 180 will still\nagree with R on A because X is a close-vs-mean machine. No new columns can change that.\n",
+  "intuition_after": "A: 180 is 58.27% vs rule 58.41% (-0.14 pp). Agree-with-rule 91.66%; disagree acc 49.14%. Residual (y!=R) n=27,228 acc 9.85% vs 50% (-40.15 pp). R still owns A at two bars \u2014 the known offset survives a 10-minute wait, just weaker (58.4% vs Round 3 61.9%). Belief (1) held. Belief (2) did not: two bars did not kill R. A-residual is far below 50% because the 180 still copies R, so it is systematically wrong on R's misses. A coin would be 50%. CEO G1 stands: no leftover 5m direction skill. B: 180 is 51.12% vs rule 49.66% (+1.46 pp), agree-with-rule 30.34%. One-bar close-to-close was ~50.9%. B is still a coin. Two-bar close-to-close did not create a forecast. Belief on B held. R is the wrong baseline for B (agrees 30%). B persist sign(close_t - close_t-1) = 49.69%. Placebos A 49.74% / 50.15%; B 50.09% / 49.85%. Do not add columns.",
+  "round3_ref": {
+    "A_1bar_logistic_180": 0.6175,
+    "A_1bar_rule": 0.619,
+    "B_1bar_close_to_close": 0.509
+  }
+}
