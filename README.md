@@ -32,12 +32,13 @@ python scripts/inspect_data.py
 python -m pytest tests/test_t1_t44.py tests/test_structure_labels.py tests/test_phase_b_features.py -q
 python scripts/build_dataset.py --csv data/mt5_raw/EURUSD_M1_202101131130_202605270000_2020_2026.csv
 python scripts/phase_c_models.py
+python scripts/phase_d_test.py
 ```
 
-`build_dataset.py` writes `data/processed/X_{train,val,test}.parquet` (scaled **180-col** `X`, RobustScaler on **67** gap columns, train-fit only), matching `y_*.parquet` (y_5m / y_30m / y_1h_structure for training; y_15m / y_1h unused comparison), and freezes `artifacts/scaler.joblib` + `artifacts/scaler.json`. Purge is 120 minutes so the 1h structure window does not cross the cutoff. Phase C scored val only (`scripts/phase_c_models.py`); the sealed test is not for tuning.
+`build_dataset.py` writes `data/processed/X_{train,val,test}.parquet` (scaled **180-col** `X`, RobustScaler on **67** gap columns, train-fit only), matching `y_*.parquet` (y_5m / y_30m / y_1h_structure for training; y_15m / y_1h unused comparison), and freezes `artifacts/scaler.joblib` + `artifacts/scaler.json`. Purge is 120 minutes so the 1h structure window does not cross the cutoff. Phase C scored val only (`scripts/phase_c_models.py`). Phase D is one sealed test pass (`scripts/phase_d_test.py`); do not retune. Authoritative writeup: `docs/phase-d-test.md`.
 
 ## Spec decisions
 
 See the results report. Short version: timestamps are naive broker-server **open** times (not UTC); `std`/`iBands` ddof=0; ATR and RSI are Wilder; SMA shift is an MT5 bar-index offset; `live_1m` snapshots with developing 5m/30m/1h bars.
 
-Authoritative spec: HolyGrail Feature Specification v1.0 (PDF). Phase B append: `docs/phase-b-features.md`.
+Authoritative spec: HolyGrail Feature Specification v1.0 (PDF). Phase B: `docs/phase-b-features.md`. Phase C: `docs/phase-c-models.md`. Phase D: `docs/phase-d-test.md`.
