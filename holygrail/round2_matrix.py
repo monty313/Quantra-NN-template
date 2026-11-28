@@ -73,6 +73,9 @@ class Round2Table:
     y_5m_close: np.ndarray  # reference only — not the train label
     y_5m_close_valid: np.ndarray
     drop_lookback_gap: np.ndarray
+    drop_short: np.ndarray
+    drop_long_tail: np.ndarray
+    row_incomplete: dict[str, np.ndarray]
     gap_report: GapReport
 
 
@@ -280,6 +283,9 @@ def build_round2_matrix(m1: pd.DataFrame) -> Round2Table:
         y_5m_close=y_cc_full[mask],
         y_5m_close_valid=v_cc_full[mask],
         drop_lookback_gap=gap.drop_lookback_gap,
+        drop_short=gap.drop_short,
+        drop_long_tail=gap.drop_long_tail,
+        row_incomplete=gap.row_incomplete,
         gap_report=gap,
     )
 
@@ -330,6 +336,11 @@ def count_report(table: Round2Table, m1: pd.DataFrame) -> dict:
         "n_columns": int(table.X.shape[1]),
         "n_5m_rows_before_gap_drop": int(len(table.X)),
         "n_dropped_lookback_gap": n_drop,
+        "n_dropped_short_lookback": int(table.drop_short.sum()),
+        "n_dropped_long_hole_tail": int(table.drop_long_tail.sum()),
+        "n_dropped_short_only": int((table.drop_short & ~table.drop_long_tail).sum()),
+        "n_dropped_long_only": int((table.drop_long_tail & ~table.drop_short).sum()),
+        "n_dropped_both_rules": int((table.drop_short & table.drop_long_tail).sum()),
         "n_rows_after_gap_drop": n_keep,
         "n_rows_finite_X_after_gap_drop": n_x_ok,
         "n_y_5m_dir_valid_after_gap_drop": n_y_dir_ok,

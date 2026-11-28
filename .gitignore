@@ -9,6 +9,7 @@ venv/
 # Large market data (download via scripts/download_mt5.py)
 data/mt5_raw/
 data/processed/
+data/processed_round2/
 data/processed_smoke/
 
 # Local dumps

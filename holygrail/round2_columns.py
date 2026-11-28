@@ -188,3 +188,24 @@ assert "s1_sma_ab_cons" in ROUND2_FEATURE_COLUMNS
 assert "s2_sma_ab_cons" in ROUND2_FEATURE_COLUMNS
 assert "s1_rsi_htf_cons" in ROUND2_FEATURE_COLUMNS
 assert "s2_rsi_htf_cons" in ROUND2_FEATURE_COLUMNS
+
+
+def _is_scaler_col(name: str) -> bool:
+    """Unbounded gaps only. Binaries, %b, states, consensus, prev5m_dir stay raw."""
+    if name == "prev5m_dir":
+        return False
+    if name.endswith("_gap") or name.endswith("50gap"):
+        return True
+    # lad_g1 / lad_g2 / lad_g3
+    if "_lad_g" in name:
+        return True
+    return False
+
+
+ROUND2_SCALER_COLUMNS: list[str] = [c for c in ROUND2_FEATURE_COLUMNS if _is_scaler_col(c)]
+assert "prev5m_dir" not in ROUND2_SCALER_COLUMNS
+assert all(c in ROUND2_FEATURE_COLUMNS for c in ROUND2_SCALER_COLUMNS)
+assert not any("pctb" in c for c in ROUND2_SCALER_COLUMNS)
+assert not any(c.endswith("_bin") for c in ROUND2_SCALER_COLUMNS)
+# 23 gap cols per TF × 5 TFs (price_sma20_gap is on every TF in Round 2).
+assert len(ROUND2_SCALER_COLUMNS) == 23 * len(ROUND2_TFS), len(ROUND2_SCALER_COLUMNS)

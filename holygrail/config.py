@@ -32,6 +32,12 @@ ROUND2_SETS = {
 }
 # 1m holes longer than this are session breaks (FX weekend ~48h), not missing minutes.
 MICRO_GAP_MAX_HOURS = 12
+# Mark 2026-11-27: drop a 5m row if a micro-gap sits in the current 5m or the
+# last 12 completed 5m (~1h). Holes longer than 60m (incl. weekends) also drop
+# the next 199 5m bars after the hole. Incomplete-bar flags stay side columns.
+GAP_SHORT_LOOKBACK_5M = 12
+GAP_LONG_HOLE_MINUTES = 60
+GAP_LONG_HOLE_DROP_BARS = 199
 
 # Timezone: files carry no zone. Treat as naive broker-server open times.
 # Do NOT convert to UTC. See Step 0 in the results report.
