@@ -158,7 +158,8 @@ def _tf_indicators(m1: pd.DataFrame, tf_key: str) -> dict[str, np.ndarray]:
     width = upper - lower
     pctb = safe_div(close_d - lower, width)
     out["bbs_pctb"] = pctb
-    if tf_key == "5m":
+    # 1m is Set 1 LTF (Speed), same pullback-style state as 5m. 15m/30m/1h use HTF state.
+    if tf_key in ("1m", "5m"):
         out["bbs_state"] = bbs_state_5m(close_d, sma20_d, mid_d)
     else:
         out["bbs_state"] = bbs_state_htf(close_d, sma20_d, mid_d)

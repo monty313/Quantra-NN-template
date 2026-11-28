@@ -18,8 +18,20 @@ from holygrail.columns import FEATURE_VERSION
 SNAPSHOT_MODE = "live_1m"
 HTF_BAR_MODE = "developing"
 TIMEFRAME_SET = {"ltf": "5min", "htf1": "30min", "htf2": "1h"}
-TF_FREQ = {"5m": "5min", "30m": "30min", "1h": "1h"}
+# 1m and 15m added for Round 2 combined matrix. Stage 1 still uses 5m/30m/1h only.
+TF_FREQ = {"1m": "1min", "5m": "5min", "15m": "15min", "30m": "30min", "1h": "1h"}
 TF_PREFIX = {"5m": "ltf", "30m": "htf1", "1h": "htf2"}
+TF_MINUTES = {"1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60}
+
+# Round 2 Step 3: Set 1 (1m+15m+30m) and Set 2 (5m+30m+1h) in one matrix.
+# 30m is in both sets — compute it once. Prefixes are the TF key (1m_, 5m_, …).
+ROUND2_TFS = ("1m", "5m", "15m", "30m", "1h")
+ROUND2_SETS = {
+    "s1": {"ltf": "1m", "htf1": "15m", "htf2": "30m"},
+    "s2": {"ltf": "5m", "htf1": "30m", "htf2": "1h"},
+}
+# 1m holes longer than this are session breaks (FX weekend ~48h), not missing minutes.
+MICRO_GAP_MAX_HOURS = 12
 
 # Timezone: files carry no zone. Treat as naive broker-server open times.
 # Do NOT convert to UTC. See Step 0 in the results report.
@@ -56,7 +68,7 @@ LABEL_ATR_FRACTION = 0.5
 # Stage-1 training heads: sign of next-closed HTF typical-price change.
 # No ATR size fence. Exact-zero move is invalid (dropped), not class 0.
 STRUCTURE_HEADS = ("5m", "30m", "1h")
-STRUCTURE_BAR_MINUTES = {"5m": 5, "30m": 30, "1h": 60}
+STRUCTURE_BAR_MINUTES = {"1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60}
 N_CLASSES = 2
 CLASS_LABELS = (-1, 1)
 # 1h structure: current 1h remainder + next 1h ≤ 120m. Tightest of the three heads.
