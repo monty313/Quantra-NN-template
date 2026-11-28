@@ -77,5 +77,5 @@ def load_scaler(path: str | Path) -> tuple[RobustScaler, dict]:
     scaler = joblib.load(path)
     meta = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
     if meta["columns"] != SCALER_COLUMNS:
-        raise ValueError("saved scaler columns do not match spec v1.0")
+        raise ValueError("saved scaler columns do not match SCALER_COLUMNS")
     return scaler, meta

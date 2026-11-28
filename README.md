@@ -31,10 +31,10 @@ python scripts/download_mt5.py
 python scripts/inspect_data.py
 python -m pytest tests/test_t1_t44.py tests/test_structure_labels.py tests/test_phase_b_features.py -q
 python scripts/build_dataset.py --csv data/mt5_raw/EURUSD_M1_202101131130_202605270000_2020_2026.csv
-python scripts/train_eval.py
+python scripts/phase_c_models.py
 ```
 
-`build_dataset.py` writes `data/processed/X_{train,val,test}.parquet` (scaled **180-col** `X`, RobustScaler on **67** gap columns, train-fit only), matching `y_*.parquet` (y_5m / y_30m / y_1h_structure for training; y_15m / y_1h unused comparison), and freezes `artifacts/scaler.joblib` + `artifacts/scaler.json`. Purge is 120 minutes so the 1h structure window does not cross the cutoff. Phase B did not rebuild or train; existing artifacts are still the 128-col run until someone runs the rebuild.
+`build_dataset.py` writes `data/processed/X_{train,val,test}.parquet` (scaled **180-col** `X`, RobustScaler on **67** gap columns, train-fit only), matching `y_*.parquet` (y_5m / y_30m / y_1h_structure for training; y_15m / y_1h unused comparison), and freezes `artifacts/scaler.joblib` + `artifacts/scaler.json`. Purge is 120 minutes so the 1h structure window does not cross the cutoff. Phase C scored val only (`scripts/phase_c_models.py`); the sealed test is not for tuning.
 
 ## Spec decisions
 

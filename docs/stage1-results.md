@@ -6,7 +6,7 @@ Why-notes for Mark: [`stage1-why-notes.md`](stage1-why-notes.md), [`stage1-plan.
 
 Stage 1 only: calibrated P(−1/+1) for next-closed **5m / 30m / 1h** direction. Not trades. ATR size fence was the wrong target.
 
-**Phase B** appended columns 129–180 (RSI/SMA/BB + `prev5m_dir`). Code and tests are 180-col / RobustScaler 67. **This results file and `artifacts/train_results.json` are still the 128-col run.** No rebuild, no train. See [`phase-b-features.md`](phase-b-features.md).
+**Phase B** appended columns 129–180 (RSI/SMA/BB + `prev5m_dir`). **Phase C** rebuilt 180-col train features, fit RobustScaler on 67 train gaps, and scored **val only**. Sealed test not touched. See [`phase-b-features.md`](phase-b-features.md) and [`phase-c-models.md`](phase-c-models.md). `artifacts/train_results.json` is still the old 128-col **test** run and is not Phase C.
 
 ---
 

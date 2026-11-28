@@ -55,16 +55,25 @@ def block_aggregate(column_scores: dict[str, float]) -> dict[str, float]:
     return out
 
 
-def ablation_drop_block(make_policy, X_train, y_train, X_val, y_val, X_val_full=None) -> dict:
+def ablation_drop_block(make_policy, X_train, y_train, X_val, y_val, X_val_full=None, columns=None) -> dict:
     """Retrain without each block on train; score log-loss on val. No test peek."""
+    columns = list(columns) if columns is not None else list(FEATURE_COLUMNS)
+    present = set(X_train.columns)
     base_policy = make_policy()
     base_policy.fit(X_train, y_train, X_val=X_val, y_val=y_val)
     base = evaluate(y_val, base_policy.predict_proba(X_val))["log_loss"]
     results = {"full": base}
+    delta_keys = []
     for block, cols in BLOCKS.items():
-        keep = [c for c in FEATURE_COLUMNS if c not in cols]
+        drop = [c for c in cols if c in present]
+        if not drop:
+            continue
+        keep = [c for c in columns if c in present and c not in drop]
+        if len(keep) == len([c for c in columns if c in present]):
+            continue
         p = make_policy()
         p.fit(X_train[keep], y_train, X_val=X_val[keep], y_val=y_val)
         results[block] = evaluate(y_val, p.predict_proba(X_val[keep]))["log_loss"]
-    results["delta_vs_full"] = {k: results[k] - base for k in BLOCKS}
+        delta_keys.append(block)
+    results["delta_vs_full"] = {k: results[k] - base for k in delta_keys}
     return results

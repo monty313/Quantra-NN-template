@@ -71,20 +71,42 @@ class MLPPolicy:
         d_in = Xn.shape[1]
         self.net = _Net(d_in, self.hidden, self.dropout).to(self.device)
         opt = torch.optim.Adam(self.net.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        loss_fn = nn.CrossEntropyLoss()
-        ds = TensorDataset(torch.from_numpy(np.array(Xn, copy=True)), torch.from_numpy(np.array(yn, copy=True)))
+        weighted = sample_weight is not None
+        if weighted:
+            sw = np.asarray(sample_weight, dtype=np.float32)
+            if sw.shape[0] != len(yn):
+                raise ValueError("sample_weight length must match y")
+            loss_fn = nn.CrossEntropyLoss(reduction="none")
+            ds = TensorDataset(
+                torch.from_numpy(np.array(Xn, copy=True)),
+                torch.from_numpy(np.array(yn, copy=True)),
+                torch.from_numpy(np.array(sw, copy=True)),
+            )
+        else:
+            loss_fn = nn.CrossEntropyLoss()
+            ds = TensorDataset(torch.from_numpy(np.array(Xn, copy=True)), torch.from_numpy(np.array(yn, copy=True)))
         loader = DataLoader(ds, batch_size=self.batch_size, shuffle=True, drop_last=False)
         best = float("inf")
         wait = 0
         self.best_state = None
         for _epoch in range(self.max_epochs):
             self.net.train()
-            for xb, yb in loader:
-                xb = xb.to(self.device)
-                yb = yb.to(self.device)
-                opt.zero_grad()
-                logits = self.net(xb)
-                loss = loss_fn(logits, yb)
+            for batch in loader:
+                if weighted:
+                    xb, yb, wb = batch
+                    xb = xb.to(self.device)
+                    yb = yb.to(self.device)
+                    wb = wb.to(self.device)
+                    opt.zero_grad()
+                    logits = self.net(xb)
+                    loss = (loss_fn(logits, yb) * wb).mean()
+                else:
+                    xb, yb = batch
+                    xb = xb.to(self.device)
+                    yb = yb.to(self.device)
+                    opt.zero_grad()
+                    logits = self.net(xb)
+                    loss = loss_fn(logits, yb)
                 loss.backward()
                 opt.step()
             if X_val is not None and y_val is not None:

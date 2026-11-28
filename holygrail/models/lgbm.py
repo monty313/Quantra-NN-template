@@ -14,20 +14,22 @@ class LightGBMPolicy:
 
     def __init__(
         self,
-        n_estimators: int = 200,
+        n_estimators: int = 400,
         max_depth: int = 4,
-        learning_rate: float = 0.05,
+        learning_rate: float = 0.03,
         subsample: float = 0.8,
         colsample_bytree: float = 0.8,
-        min_child_samples: int = 50,
-        reg_lambda: float = 1.0,
+        min_child_samples: int = 200,
+        reg_lambda: float = 2.0,
         num_leaves: int = 16,
+        subsample_freq: int = 1,
     ):
         self.params = dict(
             n_estimators=n_estimators,
             max_depth=max_depth,
             learning_rate=learning_rate,
             subsample=subsample,
+            subsample_freq=subsample_freq,
             colsample_bytree=colsample_bytree,
             min_child_samples=min_child_samples,
             reg_lambda=reg_lambda,
