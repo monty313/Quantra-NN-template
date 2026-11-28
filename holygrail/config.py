@@ -38,9 +38,16 @@ RSI_PERIODS = (3, 7, 14)
 RSI_METHOD = "wilder"  # MT5 iRSI: SMA seed then Wilder (T16)
 BB_PERIOD = 5
 BB_DEVIATION = 0.5
-BB_DDOF = 0  # same population std as MT5 iBands
+BB_DDOF = 0  # same population std as MT5 iBands (price BB and RSI BB)
 LADDER_SMAS = ((1, 0), (2, 1), (3, 2), (4, 3))  # (period, shift)
 SMA50_SHIFT = 0
+
+# Phase B (rsi_sma_bb_feature_specs_v1.0). RSI/SMA/BB on Close, developing asof.
+RSISMA_SMA_PERIOD = 5
+RSI_BB_PERIOD = 4
+RSI_BB_BB_PERIOD = 20
+RSI_BB_DEVIATION = 1.0
+SMA4_PERIOD = 4
 
 # Labels
 # Old 1m-tick heads (kept as unused comparison columns): 15m / 1h vs 0.5× 5m ATR.

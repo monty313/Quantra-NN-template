@@ -1,8 +1,12 @@
-"""Fixed 128-column order and the 46 RobustScaler gap columns. Spec v1.0 §11 and §13."""
+"""Fixed 180-column order and the 67 RobustScaler gap columns.
+
+HolyGrail v1.0 owns columns 1–128 (unchanged names and order).
+Phase B appends blocks 8–11 (rsi_sma_bb_feature_specs_v1.0 + prev5m_dir).
+"""
 
 from __future__ import annotations
 
-FEATURE_VERSION = "1.0"
+FEATURE_VERSION = "1.1"
 
 FEATURE_COLUMNS: list[str] = [
     # Block 1 CCI+Std, LTF 5m
@@ -144,8 +148,80 @@ FEATURE_COLUMNS: list[str] = [
     "s714_label",
 ]
 
-assert len(FEATURE_COLUMNS) == 128, len(FEATURE_COLUMNS)
-assert len(set(FEATURE_COLUMNS)) == 128
+FEATURE_COLUMNS_V1_0: list[str] = list(FEATURE_COLUMNS)
+
+# Block 8 rsi_sma_trio (cols 129–147): per TF p=3,7,14 bin then gap; 5m then 30m then 1h; label last.
+# Block 9 rsi_bb_reversion (cols 148–160)
+# Block 10 sma4hl_rsi_bb (cols 161–179)
+# Block 11 prev5m_dir (col 180)
+PHASE_B_COLUMNS: list[str] = [
+    "rsisma3_bin_5m",
+    "rsisma3_gap_5m",
+    "rsisma7_bin_5m",
+    "rsisma7_gap_5m",
+    "rsisma14_bin_5m",
+    "rsisma14_gap_5m",
+    "rsisma3_bin_30m",
+    "rsisma3_gap_30m",
+    "rsisma7_bin_30m",
+    "rsisma7_gap_30m",
+    "rsisma14_bin_30m",
+    "rsisma14_gap_30m",
+    "rsisma3_bin_1h",
+    "rsisma3_gap_1h",
+    "rsisma7_bin_1h",
+    "rsisma7_gap_1h",
+    "rsisma14_bin_1h",
+    "rsisma14_gap_1h",
+    "rsisma_label",
+    "rbb_pctb_5m",
+    "rbb_mid_gap_5m",
+    "rbb_mid_bin_5m",
+    "rbb_band_state_5m",
+    "rbb_pctb_30m",
+    "rbb_mid_gap_30m",
+    "rbb_mid_bin_30m",
+    "rbb_band_state_30m",
+    "rbb_pctb_1h",
+    "rbb_mid_gap_1h",
+    "rbb_mid_bin_1h",
+    "rbb_band_state_1h",
+    "rbb_label",
+    "s4_hi_gap_5m",
+    "s4_lo_gap_5m",
+    "s4_state_5m",
+    "s20_gap_5m",
+    "s4rbb_pctb_5m",
+    "s4rbb_band_state_5m",
+    "s4_hi_gap_30m",
+    "s4_lo_gap_30m",
+    "s4_state_30m",
+    "s20_gap_30m",
+    "s4rbb_pctb_30m",
+    "s4rbb_band_state_30m",
+    "s4_hi_gap_1h",
+    "s4_lo_gap_1h",
+    "s4_state_1h",
+    "s20_gap_1h",
+    "s4rbb_pctb_1h",
+    "s4rbb_band_state_1h",
+    "s4hl_label",
+    "prev5m_dir",
+]
+
+FEATURE_COLUMNS = FEATURE_COLUMNS_V1_0 + PHASE_B_COLUMNS
+
+assert len(FEATURE_COLUMNS_V1_0) == 128, len(FEATURE_COLUMNS_V1_0)
+assert len(PHASE_B_COLUMNS) == 52, len(PHASE_B_COLUMNS)
+assert len(FEATURE_COLUMNS) == 180, len(FEATURE_COLUMNS)
+assert len(set(FEATURE_COLUMNS)) == 180
+assert FEATURE_COLUMNS[128] == "rsisma3_bin_5m"
+assert FEATURE_COLUMNS[146] == "rsisma_label"
+assert FEATURE_COLUMNS[147] == "rbb_pctb_5m"
+assert FEATURE_COLUMNS[159] == "rbb_label"
+assert FEATURE_COLUMNS[160] == "s4_hi_gap_5m"
+assert FEATURE_COLUMNS[178] == "s4hl_label"
+assert FEATURE_COLUMNS[179] == "prev5m_dir"
 
 SCALER_COLUMNS: list[str] = [
     "ltf_cci10_gap",
@@ -194,10 +270,35 @@ SCALER_COLUMNS: list[str] = [
     "s714_gap_5m",
     "s714_gap_30m",
     "s714_gap_1h",
+    # Phase B: 9 rsisma gaps + 3 rbb mid gaps + 9 s4/s20 gaps. Not prev5m_dir.
+    "rsisma3_gap_5m",
+    "rsisma7_gap_5m",
+    "rsisma14_gap_5m",
+    "rsisma3_gap_30m",
+    "rsisma7_gap_30m",
+    "rsisma14_gap_30m",
+    "rsisma3_gap_1h",
+    "rsisma7_gap_1h",
+    "rsisma14_gap_1h",
+    "rbb_mid_gap_5m",
+    "rbb_mid_gap_30m",
+    "rbb_mid_gap_1h",
+    "s4_hi_gap_5m",
+    "s4_lo_gap_5m",
+    "s20_gap_5m",
+    "s4_hi_gap_30m",
+    "s4_lo_gap_30m",
+    "s20_gap_30m",
+    "s4_hi_gap_1h",
+    "s4_lo_gap_1h",
+    "s20_gap_1h",
 ]
 
-assert len(SCALER_COLUMNS) == 46, len(SCALER_COLUMNS)
+assert len(SCALER_COLUMNS) == 67, len(SCALER_COLUMNS)
 assert all(c in FEATURE_COLUMNS for c in SCALER_COLUMNS)
+assert "prev5m_dir" not in SCALER_COLUMNS
+assert "rbb_pctb_5m" not in SCALER_COLUMNS
+assert "s4rbb_pctb_5m" not in SCALER_COLUMNS
 
 # Explainability blocks (column names).
 BLOCKS: dict[str, list[str]] = {
@@ -206,7 +307,7 @@ BLOCKS: dict[str, list[str]] = {
     "sma_chain": [c for c in FEATURE_COLUMNS if c.startswith("sma_")],
     "rsi_pullback": [
         c
-        for c in FEATURE_COLUMNS
+        for c in FEATURE_COLUMNS_V1_0
         if c.startswith("rsi") or c == "rsi_pullback_state"
     ]
     + ["rsi_pullback_state_rsi_only"],
@@ -217,6 +318,14 @@ BLOCKS: dict[str, list[str]] = {
     "bbsma": [c for c in FEATURE_COLUMNS if c.startswith("bbs_")],
     "ladder": [c for c in FEATURE_COLUMNS if c.startswith("lad_")],
     "sma714": [c for c in FEATURE_COLUMNS if c.startswith("s714_")],
+    "rsisma_trio": [c for c in FEATURE_COLUMNS if c.startswith("rsisma")],
+    "rsi_bb_reversion": [c for c in FEATURE_COLUMNS if c.startswith("rbb_")],
+    "sma4hl_rsi_bb": [
+        c
+        for c in FEATURE_COLUMNS
+        if c.startswith("s4_") or c.startswith("s20_") or c.startswith("s4rbb") or c == "s4hl_label"
+    ],
+    "prev5m_dir": ["prev5m_dir"],
 }
 
 # rsi_pullback listed column 83 twice if we concatenate carelessly — keep unique order.
@@ -228,4 +337,4 @@ for name in BLOCKS["rsi_pullback"]:
         _rsi.append(name)
 BLOCKS["rsi_pullback"] = _rsi
 
-assert sum(len(v) for v in BLOCKS.values()) == 128, {k: len(v) for k, v in BLOCKS.items()}
+assert sum(len(v) for v in BLOCKS.values()) == 180, {k: len(v) for k, v in BLOCKS.items()}

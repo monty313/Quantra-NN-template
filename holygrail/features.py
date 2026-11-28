@@ -1,7 +1,7 @@
-"""Build the 128-column observation matrix X (spec §11). Raw prices never enter X.
+"""Build the 180-column observation matrix X. Raw prices never enter X.
 
-Why 128 fixed order: later models (LightGBM / MLP / RL) must be able to swap
-without renaming columns. Append future features after 128; never reorder.
+HolyGrail v1.0 owns columns 1–128 (fixed order). Phase B appends blocks 8–11
+after 128; never reorder. Later models swap without renaming.
 
 Why no fill: a NaN means the row is not ready (warm-up, zero std, zero ATR).
 Imputing 0 or the train median (adaptive-risk SimpleImputer) invents a fake
@@ -24,13 +24,20 @@ from holygrail.config import (
     BB_PERIOD,
     CCI_LEVEL_ZONE,
     CCI_PERIODS,
+    RSI_BB_BB_PERIOD,
+    RSI_BB_DEVIATION,
+    RSI_BB_PERIOD,
     RSI_PERIODS,
+    RSISMA_SMA_PERIOD,
     SHIFT_BARS,
+    SMA4_PERIOD,
     STD_PERIODS,
+    STRUCTURE_BAR_MINUTES,
     TF_FREQ,
 )
-from holygrail.indicators import cci, rolling_std, sma
+from holygrail.indicators import cci, rolling_std, rsi_wilder, sma
 from holygrail.rules import (
+    band_state,
     bbs_state_5m,
     bbs_state_htf,
     cci_level,
@@ -38,20 +45,24 @@ from holygrail.rules import (
     ladder_bonus,
     ladder_point,
     pair_consensus,
+    rbb_label,
     rsi_bin_from_rsi,
     rsi_dist50,
     rsi_pullback_state,
     rsi_pullback_state_rsi_only,
+    rsisma_label,
+    s4_state,
+    s4hl_label,
     safe_div,
     sign_np,
     three_label,
 )
-from holygrail.timing import completed_and_dev
+from holygrail.timing import completed_and_dev, resample_ohlc
 
 
 @dataclass
 class FeatureTable:
-    """X is 128 columns. Validity and ATR live beside it, never inside it."""
+    """X is 180 columns. Validity and ATR live beside it, never inside it."""
 
     timestamps: pd.DatetimeIndex  # 1m open times
     decision_time: pd.DatetimeIndex
@@ -184,6 +195,58 @@ def _tf_indicators(m1: pd.DataFrame, tf_key: str) -> dict[str, np.ndarray]:
     out["sma14"] = sma14_d
     out["s714_bin"] = sign_np(sma7_d - sma14_d)
     out["s714_gap"] = safe_div(sma7_d - sma14_d, atr)
+
+    # Phase B: RSI on Close (separate from RSI-on-typical in block 3).
+    for p in RSI_PERIODS:
+        rsi_c, _, _ = rsi_wilder(close_c, p)
+        rsi_d = asof_rsi(close_c, idx, close_d, p)
+        sma_rsi = asof_sma(rsi_c, idx, rsi_d, RSISMA_SMA_PERIOD)
+        out[f"rsisma{p}_gap"] = rsi_d - sma_rsi
+        out[f"rsisma{p}_bin"] = sign_np(rsi_d - sma_rsi)
+
+    rsi4_c, _, _ = rsi_wilder(close_c, RSI_BB_PERIOD)
+    rsi4_d = asof_rsi(close_c, idx, close_d, RSI_BB_PERIOD)
+    rbb_mid = asof_sma(rsi4_c, idx, rsi4_d, RSI_BB_BB_PERIOD)
+    rbb_std = asof_std(rsi4_c, idx, rsi4_d, RSI_BB_BB_PERIOD, ddof=BB_DDOF)
+    rbb_up = rbb_mid + RSI_BB_DEVIATION * rbb_std
+    rbb_lo = rbb_mid - RSI_BB_DEVIATION * rbb_std
+    out["rbb_pctb"] = safe_div(rsi4_d - rbb_lo, rbb_up - rbb_lo)
+    out["rbb_mid_gap"] = rsi4_d - rbb_mid
+    out["rbb_mid_bin"] = sign_np(rsi4_d - rbb_mid)
+    out["rbb_band_state"] = band_state(rsi4_d, rbb_up, rbb_lo)
+
+    sma4h = asof_sma(high_c, idx, high_d, SMA4_PERIOD)
+    sma4l = asof_sma(low_c, idx, low_d, SMA4_PERIOD)
+    out["s4_hi_gap"] = safe_div(close_d - sma4h, atr)
+    out["s4_lo_gap"] = safe_div(close_d - sma4l, atr)
+    out["s4_state"] = s4_state(close_d, sma4h, sma4l)
+    out["s20_gap"] = safe_div(close_d - sma20_d, atr)
+    out["s4rbb_pctb"] = out["rbb_pctb"]
+    out["s4rbb_band_state"] = out["rbb_band_state"]
+    return out
+
+
+def prev5m_dir_at_decision(m1: pd.DataFrame) -> np.ndarray:
+    """sign(TP5(k) − TP5(k−1)), k = last COMPLETED 5m at decision time.
+
+    Completed bars only. Developing TP of the open 5m is never read.
+    Equality → 0. Missing k or k−1 → NaN (row invalid).
+    """
+    freq = TF_FREQ["5m"]
+    bar_minutes = STRUCTURE_BAR_MINUTES["5m"]
+    completed = resample_ohlc(m1, freq)
+    tp = ((completed["high"] + completed["low"] + completed["close"]) / 3.0).to_numpy(dtype=np.float64)
+    bar_close = (completed.index + pd.Timedelta(minutes=bar_minutes)).to_numpy()
+    if "decision_time" in m1.columns:
+        decision = pd.DatetimeIndex(m1["decision_time"]).to_numpy()
+    else:
+        decision = (m1.index + pd.Timedelta(minutes=1)).to_numpy()
+    pos = np.searchsorted(bar_close, decision, side="right") - 1
+    out = np.full(len(m1), np.nan, dtype=np.float64)
+    ok = pos >= 1
+    if np.any(ok):
+        k = pos[ok]
+        out[ok] = sign_np(tp[k] - tp[k - 1]).astype(np.float64)
     return out
 
 
@@ -284,6 +347,56 @@ def build_features(m1: pd.DataFrame) -> FeatureTable:
         _put(f"s714_bin_{suf}", d["s714_bin"])
         _put(f"s714_gap_{suf}", d["s714_gap"])
     _put("s714_label", three_label(tfs["5m"]["s714_bin"], tfs["30m"]["s714_bin"], tfs["1h"]["s714_bin"]))
+
+    for tf, suf in (("5m", "5m"), ("30m", "30m"), ("1h", "1h")):
+        d = tfs[tf]
+        for p in RSI_PERIODS:
+            _put(f"rsisma{p}_bin_{suf}", d[f"rsisma{p}_bin"])
+            _put(f"rsisma{p}_gap_{suf}", d[f"rsisma{p}_gap"])
+    _put(
+        "rsisma_label",
+        rsisma_label(
+            tfs["5m"]["rsisma3_bin"],
+            tfs["5m"]["rsisma7_bin"],
+            tfs["5m"]["rsisma14_bin"],
+            tfs["30m"]["rsisma3_bin"],
+            tfs["30m"]["rsisma7_bin"],
+            tfs["30m"]["rsisma14_bin"],
+            tfs["1h"]["rsisma3_bin"],
+            tfs["1h"]["rsisma7_bin"],
+            tfs["1h"]["rsisma14_bin"],
+        ),
+    )
+
+    for tf, suf in (("5m", "5m"), ("30m", "30m"), ("1h", "1h")):
+        d = tfs[tf]
+        _put(f"rbb_pctb_{suf}", d["rbb_pctb"])
+        _put(f"rbb_mid_gap_{suf}", d["rbb_mid_gap"])
+        _put(f"rbb_mid_bin_{suf}", d["rbb_mid_bin"])
+        _put(f"rbb_band_state_{suf}", d["rbb_band_state"])
+    _put(
+        "rbb_label",
+        rbb_label(tfs["30m"]["rbb_mid_bin"], tfs["1h"]["rbb_mid_bin"], tfs["5m"]["rbb_band_state"]),
+    )
+
+    for tf, suf in (("5m", "5m"), ("30m", "30m"), ("1h", "1h")):
+        d = tfs[tf]
+        _put(f"s4_hi_gap_{suf}", d["s4_hi_gap"])
+        _put(f"s4_lo_gap_{suf}", d["s4_lo_gap"])
+        _put(f"s4_state_{suf}", d["s4_state"])
+        _put(f"s20_gap_{suf}", d["s20_gap"])
+        _put(f"s4rbb_pctb_{suf}", d["s4rbb_pctb"])
+        _put(f"s4rbb_band_state_{suf}", d["s4rbb_band_state"])
+    _put(
+        "s4hl_label",
+        s4hl_label(
+            tfs["30m"]["s4_state"],
+            tfs["1h"]["s4_state"],
+            tfs["5m"]["s20_gap"],
+            tfs["5m"]["s4rbb_band_state"],
+        ),
+    )
+    _put("prev5m_dir", prev5m_dir_at_decision(m1))
 
     X = pd.DataFrame({name: cols[name] for name in FEATURE_COLUMNS}, index=m1.index)
     if list(X.columns) != FEATURE_COLUMNS:

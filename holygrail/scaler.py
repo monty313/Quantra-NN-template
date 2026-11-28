@@ -1,11 +1,12 @@
-"""RobustScaler on the 46 gap columns, training partition only (spec §13).
+"""RobustScaler on the 67 gap columns, training partition only (spec §13).
 
-Why not StandardScaler on all 128 columns (svm-ftmo): binaries and levels are
+Why not StandardScaler on all 180 columns (svm-ftmo): binaries and levels are
 already -1/0/+1. Scaling them mixes sign with magnitude and can flip a
 "below-median" scaled gap while the raw binary is still +1. T8 checks that
-binaries stay raw.
+binaries stay raw. prev5m_dir is raw ±1/0, not a scaler column.
 
 Fit only on train. Held-out extremes must not move center_/scale_ (T5).
+Phase B added 21 gap columns (67 total); binaries, %b, labels, and prev5m_dir stay raw.
 IQR 0 → scale 1 so a constant column does not blow up.
 """
 

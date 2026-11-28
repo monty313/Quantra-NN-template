@@ -89,7 +89,7 @@ def test_T3_T4_no_future_1m_in_row():
 # ----- T5 scaler isolation -----
 def test_T5_scaler_isolation():
     rng = np.random.default_rng(0)
-    X = pd.DataFrame(rng.normal(size=(200, 128)), columns=FEATURE_COLUMNS)
+    X = pd.DataFrame(rng.normal(size=(200, 180)), columns=FEATURE_COLUMNS)
     sc = fit_gap_scaler(X.iloc[:120])
     center, scale = sc.center_.copy(), sc.scale_.copy()
     _ = transform_gaps(X.iloc[120:] * 1e6, sc)
@@ -124,6 +124,10 @@ def test_T8_sign_from_raw_not_scaled(m1_long):
     assert np.array_equal(Xs["ltf_cci10_bin"].to_numpy(), raw_bin)
     # a scaled gap can disagree in sign with the binary; binary must still equal raw
     assert Xs["ltf_cci10_bin"].isin([-1, 0, 1]).all()
+    raw_b8 = X["rsisma3_bin_5m"].to_numpy()
+    assert np.array_equal(Xs["rsisma3_bin_5m"].to_numpy(), raw_b8)
+    raw_dir = X["prev5m_dir"].to_numpy()
+    assert np.array_equal(Xs["prev5m_dir"].to_numpy(), raw_dir)
 
 
 # ----- T9 warm-up -----
@@ -149,9 +153,10 @@ def test_T10_zero_std_invalid():
 def test_T11_T34_T43_column_order_and_shape(m1_short):
     ft = build_features(m1_short)
     assert list(ft.X.columns) == FEATURE_COLUMNS
-    assert ft.X.shape[1] == 128
+    assert ft.X.shape[1] == 180
     assert FEATURE_COLUMNS[0] == "ltf_cci10_gap"
     assert FEATURE_COLUMNS[82] == "rsi_pullback_state_rsi_only"
+    assert FEATURE_COLUMNS[179] == "prev5m_dir"
 
 
 # ----- T12 ATR -----
@@ -339,7 +344,7 @@ def test_T23_price_sma20_rules():
 # ----- T24 separation -----
 def test_T24_no_answers_in_X(m1_short):
     ft = build_features(m1_short)
-    assert ft.X.shape[1] == 128
+    assert ft.X.shape[1] == 180
     assert "y_15m" not in ft.X.columns and "y_1h" not in ft.X.columns
     assert "y_5m" not in ft.X.columns and "y_30m" not in ft.X.columns
     assert "y_1h_structure" not in ft.X.columns
@@ -427,13 +432,14 @@ def test_T28_T29_purge_embargo():
 
 # ----- T30 / T44 scaler columns -----
 def test_T30_T44_scaler_columns():
-    assert len(SCALER_COLUMNS) == 46
+    assert len(SCALER_COLUMNS) == 67
     assert SCALER_COLUMNS[0] == "ltf_cci10_gap"
-    assert SCALER_COLUMNS[-1] == "s714_gap_1h"
+    assert SCALER_COLUMNS[45] == "s714_gap_1h"
+    assert SCALER_COLUMNS[-1] == "s20_gap_1h"
     rng = np.random.default_rng(1)
-    X = pd.DataFrame(rng.normal(size=(80, 128)), columns=FEATURE_COLUMNS)
+    X = pd.DataFrame(rng.normal(size=(80, 180)), columns=FEATURE_COLUMNS)
     sc = fit_gap_scaler(X)
-    assert sc.center_.shape == (46,)
+    assert sc.center_.shape == (67,)
 
 
 # ----- T31 class counts -----

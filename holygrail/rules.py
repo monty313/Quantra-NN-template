@@ -115,6 +115,67 @@ def ladder_bonus(
     return out.astype(np.int8)
 
 
+def two_of_three(a: Array, b: Array, c: Array, s: int) -> Array:
+    """True where at least two of three bins equal `s`."""
+    return (
+        (a == s).astype(np.int8) + (b == s).astype(np.int8) + (c == s).astype(np.int8)
+    ) >= 2
+
+
+def rsisma_label(
+    b3_5: Array,
+    b7_5: Array,
+    b14_5: Array,
+    b3_30: Array,
+    b7_30: Array,
+    b14_30: Array,
+    b3_1h: Array,
+    b7_1h: Array,
+    b14_1h: Array,
+) -> Array:
+    """+1 if 5m has ≥2 of 3 RSI-SMA bins +1 AND at least one HTF also does. −1 mirror. Else 0."""
+    up5 = two_of_three(b3_5, b7_5, b14_5, 1)
+    dn5 = two_of_three(b3_5, b7_5, b14_5, -1)
+    up_htf = two_of_three(b3_30, b7_30, b14_30, 1) | two_of_three(b3_1h, b7_1h, b14_1h, 1)
+    dn_htf = two_of_three(b3_30, b7_30, b14_30, -1) | two_of_three(b3_1h, b7_1h, b14_1h, -1)
+    out = np.zeros(np.shape(b3_5), dtype=np.int8)
+    out = np.where(up5 & up_htf, 1, out)
+    out = np.where(dn5 & dn_htf, -1, out)
+    return out.astype(np.int8)
+
+
+def band_state(x: Array, upper: Array, lower: Array) -> Array:
+    """+1 above upper band, −1 below lower, 0 otherwise (including equal)."""
+    out = np.zeros(np.shape(x), dtype=np.int8)
+    out = np.where(x > upper, 1, out)
+    out = np.where(x < lower, -1, out)
+    return out.astype(np.int8)
+
+
+def rbb_label(mid_bin_30: Array, mid_bin_1h: Array, band_state_5m: Array) -> Array:
+    """+1 both HTF mid bins +1 and 5m below lower band. −1 mirror. Else 0."""
+    out = np.zeros(np.shape(mid_bin_30), dtype=np.int8)
+    out = np.where((mid_bin_30 == 1) & (mid_bin_1h == 1) & (band_state_5m == -1), 1, out)
+    out = np.where((mid_bin_30 == -1) & (mid_bin_1h == -1) & (band_state_5m == 1), -1, out)
+    return out.astype(np.int8)
+
+
+def s4_state(close: Array, sma4h: Array, sma4l: Array) -> Array:
+    """+1 Close above both SMA4H and SMA4L, −1 below both, 0 between or equal."""
+    out = np.zeros(np.shape(close), dtype=np.int8)
+    out = np.where((close > sma4h) & (close > sma4l), 1, out)
+    out = np.where((close < sma4h) & (close < sma4l), -1, out)
+    return out.astype(np.int8)
+
+
+def s4hl_label(s4_30: Array, s4_1h: Array, s20_gap_5m: Array, band_state_5m: Array) -> Array:
+    """+1 both HTF s4_state +1, 5m s20_gap > 0, 5m RSI below lower band. −1 mirror. Else 0."""
+    out = np.zeros(np.shape(s4_30), dtype=np.int8)
+    out = np.where((s4_30 == 1) & (s4_1h == 1) & (s20_gap_5m > 0) & (band_state_5m == -1), 1, out)
+    out = np.where((s4_30 == -1) & (s4_1h == -1) & (s20_gap_5m < 0) & (band_state_5m == 1), -1, out)
+    return out.astype(np.int8)
+
+
 def safe_div(num: Array, den: Array) -> Array:
     """Divide; NaN when denominator is 0 or either side non-finite."""
     out = np.full(np.shape(num), np.nan, dtype=np.float64)

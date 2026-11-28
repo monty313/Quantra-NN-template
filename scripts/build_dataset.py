@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Build X (128), direction y_5m / y_30m / y_1h_structure, scaler.
+"""Build X (180), direction y_5m / y_30m / y_1h_structure, scaler.
 
-X is unchanged (128 cols, order, scaler rules, leak-safe timing).
+Phase B: columns 1–128 unchanged; blocks 8–11 appended. RobustScaler on 67
+gap columns, train-fit only. y_5m_dir is unchanged (alias of y_5m).
 y_15m / y_1h are written as unused comparison columns.
 """
 

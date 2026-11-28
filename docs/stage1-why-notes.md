@@ -33,7 +33,7 @@ We do **not** `fillna(0)` or impute medians. `adaptive-risk-ml-trader` imputes m
 
 ## Scaler
 
-RobustScaler, 25–75, **training rows only**, **46 gap columns only**.
+RobustScaler, 25–75, **training rows only**, **67 gap columns only** (46 HolyGrail v1.0 + 21 Phase B). `prev5m_dir` is raw. See `docs/phase-b-features.md`.
 
 Why not StandardScaler on everything (`svm-ftmo`): bins are -1/0/+1. Scaling them destroys the meaning and mixes magnitude with sign. Binaries are computed from **raw** values (T8) so a scaled gap below the train median can still have binary +1.
 
