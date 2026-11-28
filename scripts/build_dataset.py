@@ -75,6 +75,7 @@ def main() -> None:
                 "open_time": ft.timestamps[idx],
                 "decision_time": ft.decision_time[idx],
                 "y_5m": lab.y_5m[idx],
+                "y_5m_dir": lab.y_5m_dir[idx],  # alias of y_5m
                 "y_30m": lab.y_30m[idx],
                 "y_1h_structure": lab.y_1h_structure[idx],
                 "y_15m": lab.y_15m[idx],

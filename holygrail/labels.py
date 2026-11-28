@@ -49,6 +49,7 @@ class LabelTable:
     label_valid_1h: np.ndarray
     threshold: np.ndarray  # 0.5 * ATR14_5m at t (old heads only)
     y_5m: np.ndarray
+    y_5m_dir: np.ndarray  # alias of y_5m; same array, never a second definition
     y_30m: np.ndarray
     y_1h_structure: np.ndarray
     label_valid_5m: np.ndarray
@@ -136,6 +137,7 @@ def build_labels(m1: pd.DataFrame, features: FeatureTable) -> LabelTable:
         label_valid_1h=v60,
         threshold=threshold,
         y_5m=y5,
+        y_5m_dir=y5,  # alias: identical object, not recomputed
         y_30m=y30,
         y_1h_structure=y1h_s,
         label_valid_5m=v5,

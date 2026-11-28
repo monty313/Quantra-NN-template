@@ -109,6 +109,8 @@ def test_build_labels_keeps_old_heads_and_adds_structure():
     ft = build_features(m1)
     lab = build_labels(m1, ft)
     assert lab.y_5m.shape == lab.y_15m.shape == (len(m1),)
+    assert lab.y_5m_dir is lab.y_5m
+    assert np.array_equal(lab.y_5m_dir, lab.y_5m, equal_nan=True)
     assert lab.label_valid_5m.any() and lab.label_valid_30m.any()
     assert lab.y_1h_structure.shape == (len(m1),)
     assert lab.label_valid_1h_structure.any()
