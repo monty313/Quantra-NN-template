@@ -51,10 +51,14 @@ class LabelTable:
     y_5m: np.ndarray
     y_5m_dir: np.ndarray  # alias of y_5m; same array, never a second definition
     y_5m_nextclose_vs_typ: np.ndarray  # Round 3: 1/0, never a feature
+    y_5m_close2_vs_typ: np.ndarray  # Round 4 A: close(t+2) vs typical(t)
+    y_5m_close2_vs_close: np.ndarray  # Round 4 B: close(t+2) vs close(t)
     y_30m: np.ndarray
     y_1h_structure: np.ndarray
     label_valid_5m: np.ndarray
     label_valid_nextclose_vs_typ: np.ndarray
+    label_valid_close2_vs_typ: np.ndarray
+    label_valid_close2_vs_close: np.ndarray
     label_valid_30m: np.ndarray
     label_valid_1h_structure: np.ndarray
 
@@ -138,6 +142,55 @@ def nextclose_vs_typ(m1: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
     return y, valid
 
 
+def _close_ahead_vs_ref(
+    m1: pd.DataFrame,
+    *,
+    n_bars: int,
+    ref: str,
+) -> tuple[np.ndarray, np.ndarray]:
+    """1 if close of bar t+n_bars > ref of bar t, else 0. Ties / missing → NaN.
+
+    ref: "typ" = (H+L+C)/3 of bar t; "close" = close of bar t.
+    Shared by every 1m inside the current 5m. Never a feature.
+    """
+    if ref not in ("typ", "close"):
+        raise ValueError(ref)
+    freq = TF_FREQ["5m"]
+    bar_minutes = STRUCTURE_BAR_MINUTES["5m"]
+    completed = resample_ohlc(m1, freq)
+    tp = (completed["high"] + completed["low"] + completed["close"]) / 3.0
+    close = completed["close"]
+    ref_s = tp if ref == "typ" else close
+    idx = completed.index
+    current_open = m1.index.floor(freq)
+    fut_open = current_open + pd.Timedelta(minutes=bar_minutes * n_bars)
+    loc_now = idx.get_indexer(current_open)
+    loc_fut = idx.get_indexer(fut_open)
+    have = (loc_now >= 0) & (loc_fut >= 0)
+    y = np.full(len(m1), np.nan, dtype=np.float64)
+    valid = np.zeros(len(m1), dtype=bool)
+    if have.any():
+        move = close.to_numpy(dtype=np.float64)[loc_fut[have]] - ref_s.to_numpy(dtype=np.float64)[loc_now[have]]
+        nonzero = move != 0.0
+        y_have = np.full(have.sum(), np.nan, dtype=np.float64)
+        y_have[nonzero] = np.where(move[nonzero] > 0.0, 1.0, 0.0)
+        y[have] = y_have
+        ok = np.zeros(have.sum(), dtype=bool)
+        ok[nonzero] = True
+        valid[have] = ok
+    return y, valid
+
+
+def close2_vs_typ(m1: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """Round 4 A. 1 if close of 5m bar t+2 > typical of bar t. Not a feature."""
+    return _close_ahead_vs_ref(m1, n_bars=2, ref="typ")
+
+
+def close2_vs_close(m1: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """Round 4 B. 1 if close of 5m bar t+2 > close of bar t. Not a feature."""
+    return _close_ahead_vs_ref(m1, n_bars=2, ref="close")
+
+
 def build_labels(m1: pd.DataFrame, features: FeatureTable) -> LabelTable:
     """TP(x) = typical of the 1m candle closing at x. Missing if no candle at t+h.
 
@@ -164,6 +217,8 @@ def build_labels(m1: pd.DataFrame, features: FeatureTable) -> LabelTable:
     y60, v60 = one_tick_horizon(LABEL_HORIZONS_MIN[1])
     y5, v5 = structure_direction(m1, "5m")
     y_ncvt, v_ncvt = nextclose_vs_typ(m1)
+    y_a, v_a = close2_vs_typ(m1)
+    y_b, v_b = close2_vs_close(m1)
     y30, v30 = structure_direction(m1, "30m")
     y1h_s, v1h_s = structure_direction(m1, "1h")
     return LabelTable(
@@ -175,10 +230,14 @@ def build_labels(m1: pd.DataFrame, features: FeatureTable) -> LabelTable:
         y_5m=y5,
         y_5m_dir=y5,  # alias: identical object, not recomputed
         y_5m_nextclose_vs_typ=y_ncvt,
+        y_5m_close2_vs_typ=y_a,
+        y_5m_close2_vs_close=y_b,
         y_30m=y30,
         y_1h_structure=y1h_s,
         label_valid_5m=v5,
         label_valid_nextclose_vs_typ=v_ncvt,
+        label_valid_close2_vs_typ=v_a,
+        label_valid_close2_vs_close=v_b,
         label_valid_30m=v30,
         label_valid_1h_structure=v1h_s,
     )

@@ -73,6 +73,8 @@ def test_phase_b_y_not_in_x(m1_short):
         "y_5m",
         "y_5m_dir",
         "y_5m_nextclose_vs_typ",
+        "y_5m_close2_vs_typ",
+        "y_5m_close2_vs_close",
         "y_30m",
         "y_1h_structure",
         "y_15m",
