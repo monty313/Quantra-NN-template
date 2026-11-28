@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+.mypy_cache/
+
+# Large market data (download via scripts/download_mt5.py)
+data/mt5_raw/
+data/processed/
+data/processed_smoke/
+
+# Local dumps
+artifacts/cache/
+artifacts/*.parquet
+artifacts/*.npy
+artifacts/train_results_smoke.json
+*.log
+.DS_Store

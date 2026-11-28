@@ -1,0 +1,70 @@
+{
+  "row_set": "last_1m_of_each_5m",
+  "n_test": 117598,
+  "n_train": 217642,
+  "y_definition": "structure_direction(m1, '5m'): completed 5m = resample_ohlc left-closed open-time; tp = (H+L+C)/3; y = sign(tp[next_open] - tp[current_open]); current_open = 1m_open.floor('5min'); next_open = current_open + 5min; missing bar or exact-zero move \u2192 NaN, dropped, never class 0. y_5m_dir is an alias of y_5m (same array).",
+  "seed": 7,
+  "shuffle_block_5m_bars": 12,
+  "row_set_note": "same 117,598 test bars as prior 5m logistic run",
+  "persistence": {
+    "n_consecutive": 116679,
+    "n_gap_skipped": 919,
+    "acc_next_eq_this": 0.5863608704222697,
+    "continue_rate": 0.5863608704222697,
+    "flip_rate": 0.41363912957773036,
+    "continue_n": 68416,
+    "flip_n": 48263
+  },
+  "lag1": {
+    "n": 116679,
+    "pearson_y_t_vs_y_tminus1": 0.17270479977813302,
+    "equals_2continue_minus_1": 0.1727217408445394
+  },
+  "close_to_close": {
+    "definition": "sign(close[next 5m] - close[this 5m]); ties dropped; not stored as y_5m_dir",
+    "n_test_nonzero": 114795,
+    "n_test_ties_or_missing": 2803,
+    "logistic": {
+      "n_train": 211882,
+      "n_test": 114795,
+      "acc": 0.5099089681606341,
+      "pred_up_frac": 0.5337427588309596,
+      "y_up_frac": 0.5015636569537001
+    },
+    "persistence_acc": 0.49440444408489065,
+    "n_persist_consecutive": 111249,
+    "frac_same_as_y_5m_dir_on_cc_rows": 0.8289036978962498
+  },
+  "placebo": {
+    "definition": "y_placebo[t] = y_5m_dir[t+1] when next 5m bar is exactly 5 minutes later (sign of B_{t+2} vs B_{t+1})",
+    "logistic": {
+      "n_train": 215833,
+      "n_test": 116679,
+      "acc": 0.513562851927082,
+      "pred_up_frac": 0.5699054671363313,
+      "y_up_frac": 0.5022583326905441
+    },
+    "stop_if_acc_gt": 0.52,
+    "fail": false
+  },
+  "shuffle": {
+    "definition": "permute train y_5m_dir in blocks of 12 consecutive 5m rows; X order unchanged; test y real",
+    "logistic": {
+      "n_train": 217642,
+      "n_test": 117598,
+      "acc": 0.4921767376996207,
+      "pred_up_frac": 0.6178251330804946,
+      "y_up_frac": 0.5022704467763057
+    },
+    "stop_if_acc_gt": 0.52,
+    "fail": false
+  },
+  "real_logistic_y_5m_dir": {
+    "n_train": 217642,
+    "n_test": 117598,
+    "acc": 0.6487015085290566,
+    "pred_up_frac": 0.5113352267895712,
+    "y_up_frac": 0.5022704467763057
+  },
+  "go": true
+}
