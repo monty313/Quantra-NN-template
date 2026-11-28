@@ -50,9 +50,11 @@ class LabelTable:
     threshold: np.ndarray  # 0.5 * ATR14_5m at t (old heads only)
     y_5m: np.ndarray
     y_5m_dir: np.ndarray  # alias of y_5m; same array, never a second definition
+    y_5m_nextclose_vs_typ: np.ndarray  # Round 3: 1/0, never a feature
     y_30m: np.ndarray
     y_1h_structure: np.ndarray
     label_valid_5m: np.ndarray
+    label_valid_nextclose_vs_typ: np.ndarray
     label_valid_30m: np.ndarray
     label_valid_1h_structure: np.ndarray
 
@@ -103,6 +105,39 @@ def structure_direction(
     return y, valid
 
 
+def nextclose_vs_typ(m1: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """Round 3 label. Not a feature. 1/0, ties dropped.
+
+    At the close of this 5m bar: 1 if next 5m close > this 5m typical,
+    0 if next 5m close < this 5m typical. Typical = (H+L+C)/3 of this bar.
+    Missing next bar or exact equality → NaN / invalid (not class 0).
+    Shared by every 1m inside the current 5m, same as other structure heads.
+    """
+    freq = TF_FREQ["5m"]
+    bar_minutes = STRUCTURE_BAR_MINUTES["5m"]
+    completed = resample_ohlc(m1, freq)
+    tp = (completed["high"] + completed["low"] + completed["close"]) / 3.0
+    close = completed["close"]
+    idx = completed.index
+    current_open = m1.index.floor(freq)
+    next_open = current_open + pd.Timedelta(minutes=bar_minutes)
+    loc_now = idx.get_indexer(current_open)
+    loc_next = idx.get_indexer(next_open)
+    have = (loc_now >= 0) & (loc_next >= 0)
+    y = np.full(len(m1), np.nan, dtype=np.float64)
+    valid = np.zeros(len(m1), dtype=bool)
+    if have.any():
+        move = close.to_numpy(dtype=np.float64)[loc_next[have]] - tp.to_numpy(dtype=np.float64)[loc_now[have]]
+        nonzero = move != 0.0
+        y_have = np.full(have.sum(), np.nan, dtype=np.float64)
+        y_have[nonzero] = np.where(move[nonzero] > 0.0, 1.0, 0.0)
+        y[have] = y_have
+        ok = np.zeros(have.sum(), dtype=bool)
+        ok[nonzero] = True
+        valid[have] = ok
+    return y, valid
+
+
 def build_labels(m1: pd.DataFrame, features: FeatureTable) -> LabelTable:
     """TP(x) = typical of the 1m candle closing at x. Missing if no candle at t+h.
 
@@ -128,6 +163,7 @@ def build_labels(m1: pd.DataFrame, features: FeatureTable) -> LabelTable:
     y15, v15 = one_tick_horizon(LABEL_HORIZONS_MIN[0])
     y60, v60 = one_tick_horizon(LABEL_HORIZONS_MIN[1])
     y5, v5 = structure_direction(m1, "5m")
+    y_ncvt, v_ncvt = nextclose_vs_typ(m1)
     y30, v30 = structure_direction(m1, "30m")
     y1h_s, v1h_s = structure_direction(m1, "1h")
     return LabelTable(
@@ -138,9 +174,11 @@ def build_labels(m1: pd.DataFrame, features: FeatureTable) -> LabelTable:
         threshold=threshold,
         y_5m=y5,
         y_5m_dir=y5,  # alias: identical object, not recomputed
+        y_5m_nextclose_vs_typ=y_ncvt,
         y_30m=y30,
         y_1h_structure=y1h_s,
         label_valid_5m=v5,
+        label_valid_nextclose_vs_typ=v_ncvt,
         label_valid_30m=v30,
         label_valid_1h_structure=v1h_s,
     )

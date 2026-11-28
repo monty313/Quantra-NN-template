@@ -69,7 +69,15 @@ def test_phase_b_scaler_67_gaps_not_prev5m_dir():
 
 def test_phase_b_y_not_in_x(m1_short):
     ft = build_features(m1_short)
-    for col in ("y_5m", "y_5m_dir", "y_30m", "y_1h_structure", "y_15m", "y_1h"):
+    for col in (
+        "y_5m",
+        "y_5m_dir",
+        "y_5m_nextclose_vs_typ",
+        "y_30m",
+        "y_1h_structure",
+        "y_15m",
+        "y_1h",
+    ):
         assert col not in ft.X.columns
 
 

@@ -349,6 +349,7 @@ def test_T24_no_answers_in_X(m1_short):
     assert "y_5m" not in ft.X.columns and "y_30m" not in ft.X.columns
     assert "y_1h_structure" not in ft.X.columns
     assert "y_5m_dir" not in ft.X.columns
+    assert "y_5m_nextclose_vs_typ" not in ft.X.columns
 
 
 # ----- T25 / T26 / T27 labels -----
